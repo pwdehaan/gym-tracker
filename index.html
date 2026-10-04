@@ -193,7 +193,7 @@
     <div id="tab-settings" class="tab-content">
       <div class="card">
         <h3>Google Sheets / Drive Koppeling</h3>
-        <p style="font-size:0.85rem; color:var(--text-dim); margin: 10px 0;">Plak hier eventueel een nieuwe Web-App URL in als je deze later vervangt.</p>
+        <p style="font-size:0.85rem; color:var(--text-dim); margin: 10px 0;">Google Web-App URL instelling:</p>
         
         <div class="form-group">
           <label>Google Web-App URL:</label>
@@ -205,7 +205,7 @@
 
       <div class="card">
         <h3>Cloud Synchronisatie</h3>
-        <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:10px;">Synchroniseer je workouts handmatig met de Google Sheet.</p>
+        <p style="font-size:0.85rem; color:var(--text-dim); margin-bottom:10px;">Synchroniseer je workouts en oefeningen met Google Sheets.</p>
         <button class="btn btn-secondary" onclick="uploadDataToCloud(false)">Upload Data naar Cloud (Push)</button>
         <button class="btn btn-secondary" style="margin-top:8px;" onclick="downloadDataFromCloud(false)">Haal Data uit Cloud (Pull & Merge)</button>
       </div>
@@ -245,6 +245,23 @@
       <div class="form-group" style="margin-top:10px;">
         <label>Naam Oefening:</label>
         <input type="text" id="new-ex-name" placeholder="bijv. Bulgarian Split Squat">
+      </div>
+      <div class="form-group">
+        <label>Icoontje (Symbol):</label>
+        <select id="new-ex-icon">
+          <option value="🏋️">🏋️ Kracht / Dumbbell</option>
+          <option value="💪">💪 Biceps / Triceps / Arm</option>
+          <option value="🦵">🦵 Benen / Squat / Press</option>
+          <option value="🏃">🏃 Hardlopen / Cardiorun</option>
+          <option value="🚣">🚣 Roeien / RowErg</option>
+          <option value="🎿">🎿 SkiErg</option>
+          <option value="🛷">🛷 Sled Push / Pull</option>
+          <option value="🎯">🎯 Wall Balls / Target</option>
+          <option value="🤸">🤸 Burpees / Bodyweight</option>
+          <option value="🎒">🎒 Sandbag / Carry</option>
+          <option value="🚴">🚴 Fietsen / BikeErg</option>
+          <option value="🏊">🏊 Zwemmen</option>
+        </select>
       </div>
       <div class="form-group">
         <label>Omvang Gemeten In:</label>
@@ -332,7 +349,6 @@
       populateReportExerciseSelect();
       renderRecentTiles();
 
-      // DOWLOAD EN MERGE BIJ OPSTARTEN
       downloadDataFromCloud(true);
     };
 
@@ -351,6 +367,15 @@
       const merged = Array.from(map.values());
       merged.sort((a, b) => Number(a.id) - Number(b.id));
       return merged;
+    }
+
+    function mergeExercises(local, remote) {
+      const map = new Map();
+      DEFAULT_EXERCISES.forEach(e => map.set(String(e.id), e));
+      (local || []).forEach(e => { if (e && e.id) map.set(String(e.id), e); });
+      (remote || []).forEach(e => { if (e && e.id) map.set(String(e.id), e); });
+      
+      return Array.from(map.values());
     }
 
     function switchTab(tabName) {
@@ -697,13 +722,15 @@
       const name = document.getElementById('new-ex-name').value;
       if (!name) return alert('Vul een naam in.');
 
+      const icon = document.getElementById('new-ex-icon').value || '🏋️';
+
       const newEx = {
         id: 'custom-' + Date.now(),
         name: name,
         volume: document.getElementById('new-ex-volume').value,
         weight: document.getElementById('new-ex-weight').value,
         notes: document.getElementById('new-ex-notes').value,
-        icon: '🏋️'
+        icon: icon
       };
 
       exercises.push(newEx);
@@ -713,6 +740,9 @@
       renderRecentTiles();
       closeNewExerciseModal();
       document.getElementById('new-ex-name').value = '';
+
+      // Direct uploaden naar Google Sheets tabblad "Exercises"
+      uploadDataToCloud(true);
     }
 
     function renderExerciseList() {
@@ -729,7 +759,7 @@
         card.innerHTML = `
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <div>
-              <strong>${ex.icon || ''} ${ex.name}</strong> ${ex.isHyrox ? '<span class="badge badge-hyrox">HYROX</span>' : ''}
+              <strong>${ex.icon || '🏋️'} ${ex.name}</strong> ${ex.isHyrox ? '<span class="badge badge-hyrox">HYROX</span>' : ''}
               <div style="font-size:0.75rem; color:var(--text-dim);">${getVolumeLabel(ex.volume)} | ${ex.weight.toUpperCase()}</div>
             </div>
           </div>
@@ -960,7 +990,7 @@
         await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ type: 'SYNC_ALL', logs: logs }),
+          body: JSON.stringify({ type: 'SYNC_ALL', logs: logs, exercises: exercises }),
           redirect: 'follow'
         });
         updateSyncBadge('🟢 Synchroon');
@@ -983,21 +1013,25 @@
         if (!res.ok) throw new Error('HTTP Fout Status: ' + res.status);
         
         const data = await res.json();
-        let fetchedLogs = null;
-        if (Array.isArray(data)) fetchedLogs = data;
-        else if (data && data.logs && Array.isArray(data.logs)) fetchedLogs = data.logs;
+        let fetchedLogs = data.logs || [];
+        let fetchedExercises = data.exercises || [];
 
-        if (fetchedLogs) {
-          logs = mergeLogs(logs, fetchedLogs);
-          localStorage.setItem('gt_logs', JSON.stringify(logs));
-          renderReports();
-          renderRecentTiles();
-          
-          uploadDataToCloud(true);
-          
-          updateSyncBadge('🟢 Synchroon');
-          if (!silent) alert('Data opgehaald en samengevoegd!');
-        }
+        // MERGE LOGS EN EXERCISES
+        logs = mergeLogs(logs, fetchedLogs);
+        exercises = mergeExercises(exercises, fetchedExercises);
+
+        localStorage.setItem('gt_logs', JSON.stringify(logs));
+        localStorage.setItem('gt_exercises', JSON.stringify(exercises));
+
+        renderExerciseList();
+        populateReportExerciseSelect();
+        renderReports();
+        renderRecentTiles();
+        
+        uploadDataToCloud(true);
+        
+        updateSyncBadge('🟢 Synchroon');
+        if (!silent) alert('Data opgehaald en samengevoegd!');
       } catch (err) {
         console.error('Download Error:', err);
         updateSyncBadge('🔴 Sync Fout');
