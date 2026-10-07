@@ -1,131 +1,933 @@
-function doGet(e) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  
-  // 1. Logs
-  var logSheet = ss.getSheetByName("Logs");
-  var logs = [];
-  if (logSheet) {
-    var logData = logSheet.getDataRange().getValues();
-    for (var i = 1; i < logData.length; i++) {
-      if (!logData[i][0]) continue;
-      logs.push({
-        id: String(logData[i][0]), workoutId: String(logData[i][1]), date: String(logData[i][2]),
-        startTime: String(logData[i][3]), exerciseId: String(logData[i][4]), exerciseName: String(logData[i][5]),
-        setNum: Number(logData[i][6]), primaryValue: String(logData[i][7]), weightValue: String(logData[i][8]),
-        extraValue: String(logData[i][9]), notes: String(logData[i][10]),
-        work_kj: Number(logData[i][11] || 0), energy_kcal: Number(logData[i][12] || 0)
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gym Workout Tracker</title>
+  <style>
+    :root {
+      --bg: #121212;
+      --card-bg: #1e1e1e;
+      --primary: #ff4757;
+      --primary-hover: #ff6b81;
+      --text: #ffffff;
+      --text-dim: #a0a0a0;
+      --border: #333333;
+      --success: #2ed573;
+      --energy: #f39c12;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding-bottom: 80px; }
+    header { background-color: var(--card-bg); padding: 12px 15px; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; display: flex; justify-content: space-between; align-items: center; }
+    h1 { font-size: 1.1rem; color: var(--primary); }
+    .header-badges { display: flex; gap: 6px; align-items: center; }
+    .container { padding: 15px; max-width: 600px; margin: 0 auto; }
+    .nav-bar { position: fixed; bottom: 0; left: 0; right: 0; background-color: var(--card-bg); border-top: 1px solid var(--border); display: flex; justify-content: space-around; padding: 10px 0; z-index: 100; }
+    .nav-btn { background: none; border: none; color: var(--text-dim); font-size: 0.8rem; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; width: 25%; }
+    .nav-btn.active { color: var(--primary); font-weight: bold; }
+    .nav-btn svg { width: 22px; height: 22px; fill: currentColor; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .btn { background-color: var(--primary); color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; font-size: 1rem; margin-top: 10px; transition: 0.2s; }
+    .btn:active { transform: scale(0.98); }
+    .btn-secondary { background-color: #333; color: white; }
+    .btn-danger { background-color: #ff3838; }
+    .card { background-color: var(--card-bg); border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid var(--border); }
+    .form-group { margin-bottom: 12px; }
+    label { display: block; font-size: 0.85rem; color: var(--text-dim); margin-bottom: 5px; }
+    input, select, textarea { width: 100%; padding: 10px; background-color: #2a2a2a; border: 1px solid var(--border); border-radius: 6px; color: white; font-size: 1rem; }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); }
+    
+    .tiles-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin-bottom: 15px; max-height: 220px; overflow-y: auto; }
+    .tile-item { background: #2a2a2a; border: 1px solid var(--border); border-radius: 8px; padding: 8px; text-align: center; cursor: pointer; transition: 0.2s; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .tile-item:active { background: var(--primary); }
+    .tile-icon { font-size: 1.4rem; margin-bottom: 4px; }
+    .tile-title { font-size: 0.75rem; color: var(--text); font-weight: 500; line-height: 1.1; word-break: break-word; }
+
+    .exercise-search-container { position: relative; }
+    .suggestions { position: absolute; top: 100%; left: 0; right: 0; background: #2a2a2a; border: 1px solid var(--border); border-radius: 0 0 6px 6px; max-height: 200px; overflow-y: auto; z-index: 50; }
+    .suggestion-item { padding: 10px; border-bottom: 1px solid #333; cursor: pointer; display: flex; justify-content: space-between; }
+    .suggestion-item:hover { background-color: #333; }
+    .stats-box { background: #252525; border-left: 3px solid var(--primary); padding: 10px; border-radius: 4px; margin: 10px 0; font-size: 0.85rem; }
+    .set-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .set-row input { text-align: center; }
+    .badge { background: #333; padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; color: var(--text-dim); }
+    .badge-hyrox { background: #d35400; color: white; font-weight: bold; }
+    .badge-sync { background: #252525; border: 1px solid #444; color: var(--text-dim); font-size: 0.7rem; }
+    .badge-energy { background: rgba(243, 156, 18, 0.2); color: var(--energy); border: 1px solid var(--energy); padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
+    .timer-display { font-size: 1.5rem; font-weight: bold; text-align: center; color: var(--primary); margin: 10px 0; }
+    .flex-row { display: flex; gap: 10px; }
+    .modal { display: none; position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.8); z-index: 200; padding: 20px; align-items: center; justify-content: center; }
+    .modal-content { background: var(--card-bg); padding: 20px; border-radius: 12px; max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto; }
+    
+    .accordion-header { background: #2a2a2a; padding: 12px 15px; border-radius: 8px; margin-top: 8px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; font-weight: bold; border: 1px solid var(--border); }
+    .accordion-header:hover { background: #333; }
+    .accordion-content { display: none; background: #1a1a1a; padding: 12px; border-radius: 0 0 8px 8px; border: 1px solid var(--border); border-top: none; }
+    .accordion-content.open { display: block; }
+    .filter-btn-group { display: flex; gap: 6px; overflow-x: auto; margin-top: 10px; padding-bottom: 5px; }
+    .filter-btn { background: #2a2a2a; border: 1px solid var(--border); color: var(--text-dim); padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; cursor: pointer; whitespace: nowrap; }
+    .filter-btn.active { background: var(--primary); color: white; font-weight: bold; border-color: var(--primary); }
+    .report-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 0.8rem; text-align: left; }
+    .report-table th, .report-table td { padding: 6px 8px; border-bottom: 1px solid #333; }
+    .report-table th { color: var(--primary); background: #252525; }
+    .edit-input { width: 55px; padding: 4px; font-size: 0.8rem; text-align: center; }
+    .btn-icon { background: none; border: none; color: #ff3838; font-size: 1.1rem; cursor: pointer; padding: 0 4px; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Gym Tracker</h1>
+    <div class="header-badges">
+      <span id="sync-status-badge" class="badge badge-sync">🟡 Laden...</span>
+      <span id="active-session-badge" class="badge" style="display:none; background: var(--success); color: black;">Workout Actief</span>
+    </div>
+  </header>
+
+  <div class="container">
+    
+    <!-- TAB 1: WORKOUT -->
+    <div id="tab-workout" class="tab-content active">
+      <div id="no-session-view">
+        <div class="card" style="text-align: center; padding: 30px 15px;">
+          <h2>Klaar voor je training?</h2>
+          <p style="color: var(--text-dim); margin: 10px 0 20px 0;">Start een nieuwe sessie om je sets en herhalingen bij te houden.</p>
+          <button class="btn" id="start-btn" onclick="startNewSession()">Nieuwe Workout Starten</button>
+        </div>
+      </div>
+
+      <div id="active-session-view" style="display: none;">
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <span class="badge" id="session-id-display">ID: -</span>
+              <div style="font-size: 0.8rem; color: var(--text-dim);" id="session-start-display">Start: -</div>
+            </div>
+            <div class="timer-display" id="session-timer">00:00:00</div>
+          </div>
+          <div class="flex-row" style="margin-top:15px;">
+            <button class="btn btn-secondary" onclick="finishSession()">Workout Afronden</button>
+            <button class="btn btn-danger" onclick="cancelSession()">Workout Wissen</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Snel Kiezen (Laatst Gedaan)</h3>
+          <div id="recent-tiles-container" class="tiles-grid" style="margin-top:10px;"></div>
+
+          <label>Of Zoek een Oefening:</label>
+          <div class="form-group exercise-search-container">
+            <input type="text" id="exercise-search" placeholder="Typ om te zoeken..." oninput="filterExercises()" onfocus="filterExercises()">
+            <div id="search-suggestions" class="suggestions" style="display:none;"></div>
+          </div>
+          <button class="btn btn-secondary" onclick="openNewExerciseModal()">+ Nieuwe Oefening Maken</button>
+        </div>
+
+        <div id="active-exercise-card" class="card" style="display:none;">
+          <h3 id="selected-ex-name">Oefening</h3>
+          <p id="selected-ex-type" style="font-size:0.8rem; color:var(--text-dim); margin-bottom:10px;"></p>
+
+          <div class="stats-box" id="ex-context-box"></div>
+
+          <div class="form-group">
+            <label>Apparaat Instellingen / Notitie:</label>
+            <input type="text" id="ex-notes-input" placeholder="bijv. Zitting stand 4, Pin 8" onchange="saveExerciseNotes()">
+          </div>
+
+          <div id="sets-container"></div>
+
+          <button class="btn btn-secondary" style="margin-top:10px;" onclick="addSetRow()">+ Set Toevoegen</button>
+          <div class="flex-row" style="margin-top:10px;">
+            <button class="btn" onclick="saveExerciseLog()">Opslaan</button>
+            <button class="btn btn-danger" onclick="cancelActiveExercise()">Annuleren</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 2: OEFENINGEN BEHEREN -->
+    <div id="tab-exercises" class="tab-content">
+      <div class="card">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+          <h3>Oefeningen Bibliotheek</h3>
+          <button class="btn" style="width:auto; padding: 6px 12px; font-size:0.85rem;" onclick="openNewExerciseModal()">+ Nieuw</button>
+        </div>
+        <div class="form-group">
+          <input type="text" id="lib-search" placeholder="Zoek in bibliotheek..." oninput="renderExerciseList()">
+        </div>
+        <div id="exercise-list"></div>
+      </div>
+    </div>
+
+    <!-- TAB 3: RAPPORTAGE / HISTORIE -->
+    <div id="tab-reports" class="tab-content">
+      <div class="card">
+        <h3>Resultaten Bekijken</h3>
+        <div class="form-group" style="margin-top:10px;">
+          <select id="report-filter-type" onchange="toggleReportFilter()">
+            <option value="session">Per Sessie</option>
+            <option value="exercise">Per Oefening</option>
+            <option value="hyrox">HYROX</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="report-exercise-select-group" style="display:none;">
+          <label>Kies Oefening:</label>
+          <select id="report-exercise-select" onchange="renderReports()"></select>
+        </div>
+
+        <div id="date-filter-container">
+          <label>Periode Filter:</label>
+          <div class="filter-btn-group" id="filter-btn-container">
+            <button class="filter-btn active" id="btn-1m" onclick="setDateFilter('1m')">1 Maand</button>
+            <button class="filter-btn" id="btn-3m" onclick="setDateFilter('3m')">3 Maanden</button>
+            <button class="filter-btn" id="btn-6m" onclick="setDateFilter('6m')">6 Maanden</button>
+            <button class="filter-btn" id="btn-1y" onclick="setDateFilter('1y')">1 Jaar</button>
+            <button class="filter-btn" id="btn-all" onclick="setDateFilter('all')">Alles</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="report-results"></div>
+    </div>
+
+    <!-- TAB 4: INSTELLINGEN -->
+    <div id="tab-settings" class="tab-content">
+      
+      <div class="card">
+        <h3>Lichaamsmetingen & Rendement (Profiel)</h3>
+        <p style="font-size:0.8rem; color:var(--text-dim); margin-bottom:10px;">Deze data wordt gebruikt om de geleverde mechanische arbeid (kJ) en het energieverbruik (kcal) te berekenen per set.</p>
+        
+        <div style="display:flex; gap:10px;">
+          <div class="form-group" style="flex:1;">
+            <label>Gewicht (kg):</label>
+            <input type="number" id="prof-weight" step="0.1" placeholder="87">
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label>Lengte (m):</label>
+            <input type="number" id="prof-height" step="0.01" placeholder="1.97">
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label>Efficiëntie:</label>
+            <input type="number" id="prof-eff" step="0.01" placeholder="0.23">
+          </div>
+        </div>
+        <button class="btn btn-secondary" onclick="saveProfile()">Opslaan als nieuwe meting</button>
+        <div id="prof-status" style="font-size:0.85rem; margin-top:10px; color:var(--success); text-align:center;"></div>
+      </div>
+
+      <div class="card">
+        <h3>Google Sheets / Drive Koppeling</h3>
+        <p style="font-size:0.85rem; color:var(--text-dim); margin: 10px 0;">Google Web-App URL instelling:</p>
+        <div class="form-group">
+          <label>Google Web-App URL:</label>
+          <input type="url" id="google-script-url" placeholder="https://script.google.com/macros/s/.../exec">
+        </div>
+        <button class="btn" onclick="saveGoogleUrl()">Koppeling Opslaan</button>
+      </div>
+
+      <div class="card">
+        <h3>Cloud Synchronisatie</h3>
+        <button class="btn btn-secondary" onclick="uploadDataToCloud(false)">Upload Data naar Cloud (Push)</button>
+        <button class="btn btn-secondary" style="margin-top:8px;" onclick="downloadDataFromCloud(false)">Haal Data uit Cloud (Pull & Merge)</button>
+      </div>
+
+      <div class="card">
+        <h3>Lokale Data Beheer</h3>
+        <button class="btn btn-danger" onclick="clearAllData()">Alle Lokale Data Wissen</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MODAL VOOR NIEUWE OEFENING -->
+  <div id="new-ex-modal" class="modal">
+    <div class="modal-content">
+      <h3>Nieuwe Oefening Toevoegen</h3>
+      <div class="form-group" style="margin-top:10px;">
+        <label>Naam Oefening:</label>
+        <input type="text" id="new-ex-name" placeholder="bijv. Bulgarian Split Squat">
+      </div>
+      <div style="display:flex; gap:10px;">
+        <div class="form-group" style="flex:1;">
+          <label>Icoon:</label>
+          <select id="new-ex-icon">
+            <option value="🏋️">🏋️ Kracht</option><option value="💪">💪 Armen</option>
+            <option value="🦵">🦵 Benen</option><option value="🏃">🏃 Cardio</option>
+            <option value="🚣">🚣 Row</option><option value="🎿">🎿 Ski</option>
+            <option value="🛷">🛷 Sled</option><option value="🎯">🎯 Wall Balls</option>
+            <option value="🤸">🤸 Burpees</option><option value="🎒">🎒 Sandbag</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label>Volume:</label>
+          <select id="new-ex-volume">
+            <option value="reps">Reps</option><option value="meters">Meters</option>
+            <option value="hyrox_erg">Afst+Tijd+Stand</option>
+            <option value="hyrox_all">M/R+KG+Tijd</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Rekenformule Arbeid (kJ):</label>
+        <p style="font-size:0.7rem; color:var(--text-dim); margin-bottom:4px;">Variabelen: P=Waarde(Reps/M), K=Gewicht, BW=Lichaamsgewicht, H=Lengte</p>
+        <input type="text" id="new-ex-formula" placeholder="bijv. P * K * 0.00540">
+      </div>
+      <div class="form-group">
+        <label>Standaard Instelling / Notitie:</label>
+        <input type="text" id="new-ex-notes" placeholder="bijv. Bankje op stand 2">
+      </div>
+      <div class="flex-row">
+        <button class="btn" onclick="saveNewExercise()">Opslaan</button>
+        <button class="btn btn-secondary" onclick="closeNewExerciseModal()">Annuleren</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const DEFAULT_GOOGLE_URL = '';
+
+    const DEFAULT_PROFILES = [
+      { id: 'p1', date: '2024-01-01', height: 1.97, weight: 87.0, efficiency: 0.23 }
+    ];
+
+    // FORMULES: P = Prestatie (Reps/Meters), K = Gewicht(kg), BW = Lichaamsgewicht, H = Lengte
+    const DEFAULT_EXERCISES = [
+      { id: 'h1', name: 'Hardlopen (Hyrox)', volume: 'hyrox_all', weight: 'bw', isHyrox: true, isStation: false, target: '1000m (1 km)', notes: '', icon: '🏃', formula: 'P * BW * 0.001' },
+      { id: 'h2', name: 'SkiErg (Hyrox)', volume: 'hyrox_erg', weight: 'bw', isHyrox: true, isStation: true, target: '1000m', notes: '', icon: '🎿', formula: 'P * 0.090' },
+      { id: 'h3', name: 'Sled Push (Hyrox)', volume: 'hyrox_all', weight: 'kg', isHyrox: true, isStation: true, target: '50m @ 152 kg', notes: '', icon: '🛷', formula: 'P * (K + 20) * 0.00392' },
+      { id: 'h4', name: 'Sled Pull (Hyrox)', volume: 'hyrox_all', weight: 'kg', isHyrox: true, isStation: true, target: '50m @ 103 kg', notes: '', icon: '🛷', formula: 'P * K * 0.00392' },
+      { id: 'h5', name: 'Burpee Broad Jumps (Hyrox)', volume: 'hyrox_all', weight: 'bw', isHyrox: true, isStation: true, target: '80m', notes: '', icon: '🤸', formula: 'P * BW * 0.0068' },
+      { id: 'h6', name: 'Roeien / RowErg (Hyrox)', volume: 'hyrox_erg', weight: 'bw', isHyrox: true, isStation: true, target: '1000m', notes: '', icon: '🚣', formula: 'P * 0.090' },
+      { id: 'h7', name: 'Farmers Carry (Hyrox)', volume: 'hyrox_all', weight: 'kg', isHyrox: true, isStation: true, target: '200m @ 2x24 kg', notes: '', icon: '🏋️', formula: 'P * (K + BW) * 0.00041' },
+      { id: 'h8', name: 'Sandbag Lunges (Hyrox)', volume: 'hyrox_all', weight: 'kg', isHyrox: true, isStation: true, target: '100m @ 20 kg', notes: '', icon: '🎒', formula: 'P * (K + BW * 0.8) * 0.00638' },
+      { id: 'h9', name: 'Wall Balls (Hyrox)', volume: 'hyrox_all', weight: 'kg', isHyrox: true, isStation: true, target: '100 reps @ 6 kg', notes: '', icon: '🎯', formula: 'P * (0.444 + K * 0.00932)' },
+      { id: 'k1', name: 'Leg Press', volume: 'reps', weight: 'kg', notes: '', icon: '🦵', formula: 'P * (K + 13) * 0.00491' },
+      { id: 'k2', name: 'Lat Pull Down', volume: 'reps', weight: 'kg', notes: '', icon: '💪', formula: 'P * K * 0.00687' },
+      { id: 'k3', name: 'Dumbbell Shoulder press', volume: 'reps', weight: 'kg', notes: '', icon: '🏋️', formula: 'P * K * 0.00589' },
+      { id: 'k4', name: 'Bent over row', volume: 'reps', weight: 'kg', notes: '', icon: '🏋️', formula: 'P * K * 0.00491' },
+      { id: 'k5', name: 'Leg extension', volume: 'reps', weight: 'kg', notes: '', icon: '🦵', formula: 'P * K * 0.00343' },
+      { id: 'k6', name: 'Leg curl', volume: 'reps', weight: 'kg', notes: '', icon: '🦵', formula: 'P * K * 0.00343' },
+      { id: 'k7', name: 'Dumbbell Biceps Curl', volume: 'reps', weight: 'kg', notes: '', icon: '💪', formula: 'P * K * 0.00441' },
+      { id: 'k8', name: 'Barbell bench press', volume: 'reps', weight: 'kg', notes: '', icon: '🏋️', formula: 'P * K * 0.00540' },
+      { id: 'k9', name: 'Barbell shoulder press', volume: 'reps', weight: 'kg', notes: '', icon: '🏋️', formula: 'P * K * 0.00589' },
+      { id: 'k10', name: 'Biceps Curl', volume: 'reps', weight: 'kg', notes: '', icon: '💪', formula: 'P * K * 0.00441' },
+      { id: 'k11', name: 'Barbell Shoulder', volume: 'reps', weight: 'kg', notes: '', icon: '🏋️', formula: 'P * K * 0.00589' },
+      { id: 'k12', name: 'Triceps dip', volume: 'reps', weight: 'bw', notes: '', icon: '💪', formula: 'P * (BW + K) * 0.00491' },
+      { id: 'k13', name: 'Pectoral Fly', volume: 'reps', weight: 'kg', notes: '', icon: '🏋️', formula: 'P * K * 0.00392' },
+      { id: 'k14', name: 'Reverse Fly', volume: 'reps', weight: 'kg', notes: '', icon: '🏋️', formula: 'P * K * 0.00392' },
+      { id: 'k15', name: 'Adduction', volume: 'reps', weight: 'kg', notes: '', icon: '🦵', formula: 'P * K * 0.00294' },
+      { id: 'k16', name: 'Abduction', volume: 'reps', weight: 'kg', notes: '', icon: '🦵', formula: 'P * K * 0.00294' }
+    ];
+
+    let exercises = JSON.parse(localStorage.getItem('gt_exercises')) || DEFAULT_EXERCISES;
+    let logs = JSON.parse(localStorage.getItem('gt_logs')) || [];
+    let profiles = JSON.parse(localStorage.getItem('gt_profiles')) || DEFAULT_PROFILES;
+    let currentSession = JSON.parse(localStorage.getItem('gt_current_session')) || null;
+
+    let timerInterval = null;
+    let selectedExerciseForWorkout = null;
+    let selectedDateFilter = '1m';
+
+    window.onload = function() {
+      if(!localStorage.getItem('gt_exercises')) localStorage.setItem('gt_exercises', JSON.stringify(DEFAULT_EXERCISES));
+      if(!localStorage.getItem('gt_profiles')) localStorage.setItem('gt_profiles', JSON.stringify(DEFAULT_PROFILES));
+      
+      const urlInput = document.getElementById('google-script-url');
+      if (urlInput) urlInput.value = localStorage.getItem('gt_google_url') || DEFAULT_GOOGLE_URL;
+
+      populateProfileUI();
+      checkActiveSession();
+      renderExerciseList();
+      populateReportExerciseSelect();
+      renderRecentTiles();
+      downloadDataFromCloud(true);
+    };
+
+    function populateProfileUI() {
+      const active = getProfileForDate(new Date().toISOString().split('T')[0]);
+      document.getElementById('prof-weight').value = active.weight;
+      document.getElementById('prof-height').value = active.height;
+      document.getElementById('prof-eff').value = active.efficiency;
+    }
+
+    function saveProfile() {
+      const w = parseFloat(document.getElementById('prof-weight').value);
+      const h = parseFloat(document.getElementById('prof-height').value);
+      const e = parseFloat(document.getElementById('prof-eff').value);
+      if(!w || !h || !e) return alert("Vul alle profielvelden in.");
+      
+      const newProf = { id: 'p-'+Date.now(), date: new Date().toISOString().split('T')[0], height: h, weight: w, efficiency: e };
+      profiles.push(newProf);
+      profiles.sort((a,b) => new Date(a.date) - new Date(b.date));
+      localStorage.setItem('gt_profiles', JSON.stringify(profiles));
+      document.getElementById('prof-status').innerText = "Nieuwe meting opgeslagen! (" + newProf.date + ")";
+      uploadDataToCloud(true);
+    }
+
+    function getProfileForDate(dateStr) {
+      let active = profiles[0] || DEFAULT_PROFILES[0];
+      const targetDate = new Date(dateStr);
+      for(let p of profiles) {
+        if(new Date(p.date) <= targetDate) active = p;
+      }
+      return active;
+    }
+
+    function calculateEnergyForLog(log) {
+      const prof = getProfileForDate(log.date);
+      const ex = exercises.find(e => e.id === log.exerciseId);
+      if(!ex || !ex.formula) { log.work_kj = 0; log.energy_kcal = 0; return log; }
+      
+      let P = parseFloat(log.primaryValue) || 0;
+      let K = parseFloat(log.weightValue) || 0;
+      
+      try {
+        const func = new Function('P', 'K', 'BW', 'H', 'return ' + ex.formula);
+        let w_kj = func(P, K, prof.weight, prof.height);
+        if (isNaN(w_kj) || w_kj < 0) w_kj = 0;
+        
+        let e_kcal = 0;
+        if(w_kj > 0 && prof.efficiency > 0) e_kcal = w_kj / (prof.efficiency * 4.184);
+        
+        log.work_kj = w_kj;
+        log.energy_kcal = e_kcal;
+      } catch(err) {
+        console.error("Formula error for", ex.name, err);
+        log.work_kj = 0; log.energy_kcal = 0;
+      }
+      return log;
+    }
+
+    function updateSyncBadge(statusText) {
+      const badge = document.getElementById('sync-status-badge');
+      const details = document.getElementById('sync-status-details');
+      if (badge) badge.innerText = statusText;
+      if (details) details.innerText = statusText;
+    }
+
+    function mergeData(local, remote) {
+      const map = new Map();
+      (local || []).forEach(l => { if(l && l.id) map.set(String(l.id), l); });
+      (remote || []).forEach(l => { if(l && l.id) map.set(String(l.id), l); });
+      const merged = Array.from(map.values());
+      if(merged.length>0 && merged[0].setNum) merged.sort((a, b) => Number(a.id) - Number(b.id)); // logs
+      return merged;
+    }
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+      document.getElementById(`tab-${tabName}`).classList.add('active');
+      if(event && event.currentTarget) event.currentTarget.classList.add('active');
+      if(tabName === 'reports') renderReports();
+    }
+
+    function startNewSession() {
+      const now = new Date();
+      currentSession = { id: 'W-' + Date.now().toString().slice(-6), date: now.toISOString().split('T')[0], startTime: now.toTimeString().split(' ')[0].substring(0, 5), startTimestamp: now.getTime(), endTime: null };
+      localStorage.setItem('gt_current_session', JSON.stringify(currentSession));
+      checkActiveSession();
+      renderRecentTiles();
+    }
+
+    function checkActiveSession() {
+      const activeBadge = document.getElementById('active-session-badge');
+      if (currentSession) {
+        document.getElementById('no-session-view').style.display = 'none';
+        document.getElementById('active-session-view').style.display = 'block';
+        activeBadge.style.display = 'inline-block';
+        document.getElementById('session-id-display').innerText = 'ID: ' + currentSession.id;
+        document.getElementById('session-start-display').innerText = `Start: ${currentSession.date} om ${currentSession.startTime}`;
+        startTimer();
+      } else {
+        document.getElementById('no-session-view').style.display = 'block';
+        document.getElementById('active-session-view').style.display = 'none';
+        activeBadge.style.display = 'none';
+        clearInterval(timerInterval);
+      }
+    }
+
+    function startTimer() {
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        if (!currentSession) return;
+        const diff = Math.floor((Date.now() - currentSession.startTimestamp) / 1000);
+        const hrs = Math.floor(diff / 3600).toString().padStart(2, '0');
+        const mins = Math.floor((diff % 3600) / 60).toString().padStart(2, '0');
+        const secs = (diff % 60).toString().padStart(2, '0');
+        document.getElementById('session-timer').innerText = `${hrs}:${mins}:${secs}`;
+      }, 1000);
+    }
+
+    function finishSession() {
+      if (confirm('Wil je deze workout afronden en opslaan?')) {
+        currentSession.endTime = new Date().toTimeString().split(' ')[0].substring(0, 5);
+        uploadDataToCloud(true);
+        currentSession = null;
+        localStorage.removeItem('gt_current_session');
+        checkActiveSession();
+        alert('Workout opgeslagen en gesynchroniseerd!');
+      }
+    }
+
+    function cancelSession() {
+      if (confirm('Weet je zeker dat je deze workout wilt annuleren en NIET wilt opslaan?')) {
+        currentSession = null;
+        localStorage.removeItem('gt_current_session');
+        checkActiveSession();
+      }
+    }
+
+    function renderRecentTiles() {
+      const container = document.getElementById('recent-tiles-container');
+      if (!container) return;
+      container.innerHTML = '';
+      const usedIds = []; const recentList = [];
+      for (let i = logs.length - 1; i >= 0; i--) {
+        if (!usedIds.includes(logs[i].exerciseId)) {
+          usedIds.push(logs[i].exerciseId);
+          const exObj = exercises.find(e => e.id === logs[i].exerciseId);
+          if (exObj) recentList.push(exObj);
+        }
+        if (recentList.length >= 15) break;
+      }
+      if (recentList.length < 15) {
+        exercises.forEach(ex => {
+          if (!usedIds.includes(ex.id) && recentList.length < 15) { usedIds.push(ex.id); recentList.push(ex); }
+        });
+      }
+      recentList.forEach(ex => {
+        const tile = document.createElement('div');
+        tile.className = 'tile-item';
+        tile.onclick = () => selectExerciseForWorkout(ex);
+        tile.innerHTML = `<div class="tile-icon">${ex.icon || '🏋️'}</div><div class="tile-title">${ex.name}</div>`;
+        container.appendChild(tile);
       });
     }
-  }
-  
-  // 2. Oefeningen
-  var exSheet = ss.getSheetByName("Exercises");
-  var exercises = [];
-  if (exSheet) {
-    var exData = exSheet.getDataRange().getValues();
-    for (var j = 1; j < exData.length; j++) {
-      if (!exData[j][0]) continue;
-      exercises.push({
-        id: String(exData[j][0]), name: String(exData[j][1]), volume: String(exData[j][2]),
-        weight: String(exData[j][3]), isHyrox: String(exData[j][4]) === "true", isStation: String(exData[j][5]) === "true",
-        target: String(exData[j][6] || ''), notes: String(exData[j][7] || ''), icon: String(exData[j][8] || '🏋️'),
-        formula: String(exData[j][9] || '')
+
+    function filterExercises() {
+      const query = document.getElementById('exercise-search').value.toLowerCase();
+      const suggestions = document.getElementById('search-suggestions');
+      suggestions.innerHTML = '';
+      if (!query) { suggestions.style.display = 'none'; return; }
+      const filtered = exercises.filter(ex => ex.name.toLowerCase().includes(query));
+      if (filtered.length === 0) { suggestions.style.display = 'none'; return; }
+      filtered.forEach(ex => {
+        const item = document.createElement('div');
+        item.className = 'suggestion-item';
+        item.innerHTML = `<span>${ex.icon || ''} ${ex.name}</span> ${ex.isHyrox ? '<span class="badge badge-hyrox">HYROX</span>' : ''}`;
+        item.onclick = () => selectExerciseForWorkout(ex);
+        suggestions.appendChild(item);
+      });
+      suggestions.style.display = 'block';
+    }
+
+    function selectExerciseForWorkout(ex) {
+      selectedExerciseForWorkout = ex;
+      document.getElementById('exercise-search').value = '';
+      document.getElementById('search-suggestions').style.display = 'none';
+      document.getElementById('active-exercise-card').style.display = 'block';
+      document.getElementById('selected-ex-name').innerText = (ex.icon ? ex.icon + ' ' : '') + ex.name;
+      document.getElementById('selected-ex-type').innerText = `Type: ${getVolumeLabel(ex.volume)} | Zwaarte: ${ex.weight.toUpperCase()}`;
+      document.getElementById('ex-notes-input').value = ex.notes || '';
+      initSetRows();
+    }
+
+    function getVolumeLabel(v) {
+      if(v === 'reps') return 'Reps'; if(v === 'time') return 'Tijd'; if(v === 'meters') return 'Meters';
+      if(v === 'hyrox_erg') return 'Afst+Tijd+Stand'; if(v === 'hyrox_all') return 'M/R+KG+Tijd';
+      return v;
+    }
+
+    function saveExerciseNotes() {
+      if (!selectedExerciseForWorkout) return;
+      selectedExerciseForWorkout.notes = document.getElementById('ex-notes-input').value;
+      const index = exercises.findIndex(e => e.id === selectedExerciseForWorkout.id);
+      if (index !== -1) {
+        exercises[index].notes = selectedExerciseForWorkout.notes;
+        localStorage.setItem('gt_exercises', JSON.stringify(exercises));
+      }
+    }
+
+    function initSetRows() {
+      document.getElementById('sets-container').innerHTML = '';
+      addSetRow();
+    }
+
+    function addSetRow() {
+      const container = document.getElementById('sets-container');
+      const ex = selectedExerciseForWorkout;
+      let lastP = '', lastW = '', lastE = '';
+      const rows = container.querySelectorAll('.set-row');
+      if (rows.length > 0) {
+        const lr = rows[rows.length - 1];
+        lastP = lr.querySelector('.set-primary')?.value || '';
+        lastW = lr.querySelector('.set-weight')?.value || '';
+        lastE = lr.querySelector('.set-extra')?.value || '';
+      }
+      const row = document.createElement('div'); row.className = 'set-row';
+      let html = `<span style="width:25px; color:var(--text-dim); font-size:0.85rem;">#${rows.length + 1}</span>`;
+
+      if (ex.volume === 'hyrox_erg') {
+        html += `<input type="number" placeholder="${lastP||'Meters'}" value="${lastP}" class="set-primary">
+                 <input type="text" placeholder="${lastE||'Tijd (m:s)'}" value="${lastE}" class="set-extra">
+                 <input type="number" placeholder="${lastW||'Stand'}" value="${lastW}" class="set-weight">`;
+      } else if (ex.volume === 'hyrox_all') {
+        html += `<input type="text" placeholder="${lastP||'M/R'}" value="${lastP}" class="set-primary">
+                 <input type="number" placeholder="${lastW||'KG'}" value="${lastW}" class="set-weight">
+                 <input type="text" placeholder="${lastE||'Tijd (m:s)'}" value="${lastE}" class="set-extra">`;
+      } else {
+        html += `<input type="number" placeholder="${lastP||getVolumeLabel(ex.volume)}" value="${lastP}" class="set-primary">
+                 <input type="number" placeholder="${lastW||(ex.weight==='kg'?'KG':'BW')}" value="${lastW}" class="set-weight">`;
+      }
+      row.innerHTML = html; container.appendChild(row);
+    }
+
+    function saveExerciseLog() {
+      if (!currentSession || !selectedExerciseForWorkout) return;
+      const rows = document.querySelectorAll('#sets-container .set-row');
+      rows.forEach((row, index) => {
+        const primary = row.querySelector('.set-primary')?.value;
+        const weight = row.querySelector('.set-weight')?.value || '';
+        const extra = row.querySelector('.set-extra')?.value || '';
+        if (primary) {
+          let logEntry = {
+            id: Date.now() + index, workoutId: currentSession.id, date: currentSession.date,
+            startTime: currentSession.startTime, exerciseId: selectedExerciseForWorkout.id,
+            exerciseName: selectedExerciseForWorkout.name, setNum: index + 1,
+            primaryValue: primary, weightValue: weight, extraValue: extra,
+            notes: selectedExerciseForWorkout.notes || ''
+          };
+          logEntry = calculateEnergyForLog(logEntry);
+          logs.push(logEntry);
+        }
+      });
+      localStorage.setItem('gt_logs', JSON.stringify(logs));
+      document.getElementById('active-exercise-card').style.display = 'none';
+      selectedExerciseForWorkout = null;
+      renderRecentTiles();
+      uploadDataToCloud(true);
+      alert('Oefening opgeslagen!');
+    }
+
+    function cancelActiveExercise() {
+      document.getElementById('active-exercise-card').style.display = 'none';
+      selectedExerciseForWorkout = null;
+    }
+
+    function deleteSession(workoutId) {
+      if (confirm(`Sessie ${workoutId} verwijderen?`)) {
+        logs = logs.filter(l => l.workoutId !== workoutId);
+        localStorage.setItem('gt_logs', JSON.stringify(logs));
+        renderReports();
+        uploadDataToCloud(true);
+      }
+    }
+
+    function deleteSingleLog(logId) {
+      logs = logs.filter(l => l.id != logId);
+      localStorage.setItem('gt_logs', JSON.stringify(logs));
+      renderReports();
+      uploadDataToCloud(true);
+    }
+
+    function autoSaveLogEdit(logId) {
+      let log = logs.find(l => l.id == logId);
+      if (log) {
+        log.primaryValue = document.getElementById(`edit-p-${logId}`)?.value || '';
+        log.weightValue = document.getElementById(`edit-w-${logId}`)?.value || '';
+        log.extraValue = document.getElementById(`edit-e-${logId}`)?.value || '';
+        
+        log = calculateEnergyForLog(log); // Herberekenen met nieuwe waarden
+        localStorage.setItem('gt_logs', JSON.stringify(logs));
+        uploadDataToCloud(true);
+        
+        // Update live in UI als element bestaat
+        const w_el = document.getElementById(`lbl-w-${logId}`);
+        const e_el = document.getElementById(`lbl-e-${logId}`);
+        if(w_el) w_el.innerText = log.work_kj.toFixed(1) + ' kJ';
+        if(e_el) e_el.innerText = log.energy_kcal.toFixed(1) + ' kcal';
+      }
+    }
+
+    function openNewExerciseModal() { document.getElementById('new-ex-modal').style.display = 'flex'; }
+    function closeNewExerciseModal() { document.getElementById('new-ex-modal').style.display = 'none'; }
+
+    function saveNewExercise() {
+      const name = document.getElementById('new-ex-name').value;
+      if (!name) return alert('Vul een naam in.');
+
+      const newEx = {
+        id: 'custom-' + Date.now(),
+        name: name,
+        volume: document.getElementById('new-ex-volume').value,
+        weight: document.getElementById('new-ex-weight').value,
+        notes: document.getElementById('new-ex-notes').value,
+        icon: document.getElementById('new-ex-icon').value || '🏋️',
+        formula: document.getElementById('new-ex-formula').value || ''
+      };
+      exercises.push(newEx);
+      localStorage.setItem('gt_exercises', JSON.stringify(exercises));
+      renderExerciseList(); populateReportExerciseSelect(); renderRecentTiles();
+      closeNewExerciseModal();
+      uploadDataToCloud(true);
+    }
+
+    function renderExerciseList() {
+      const container = document.getElementById('exercise-list');
+      const query = document.getElementById('lib-search')?.value.toLowerCase() || '';
+      container.innerHTML = '';
+      exercises.filter(e => e.name.toLowerCase().includes(query)).forEach(ex => {
+        const card = document.createElement('div'); card.className = 'card'; card.style.padding = '10px 15px'; card.style.marginBottom = '8px';
+        card.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <strong>${ex.icon||'🏋️'} ${ex.name}</strong> ${ex.isHyrox?'<span class="badge badge-hyrox">HYROX</span>':''}
+              <div style="font-size:0.75rem; color:var(--text-dim);">${getVolumeLabel(ex.volume)} | ${ex.weight.toUpperCase()} | Formule: ${ex.formula||'-'}</div>
+            </div>
+          </div>`;
+        container.appendChild(card);
       });
     }
+
+    function populateReportExerciseSelect() {
+      const select = document.getElementById('report-exercise-select');
+      select.innerHTML = '';
+      exercises.forEach(ex => {
+        const opt = document.createElement('option'); opt.value = ex.id; opt.innerText = ex.name; select.appendChild(opt);
+      });
+    }
+
+    function toggleReportFilter() {
+      const type = document.getElementById('report-filter-type').value;
+      document.getElementById('report-exercise-select-group').style.display = type === 'exercise' ? 'block' : 'none';
+      setDateFilter(type === 'session' ? '1m' : '3m');
+    }
+
+    function setDateFilter(filter) {
+      selectedDateFilter = filter;
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById(`btn-${filter}`)?.classList.add('active');
+      renderReports();
+    }
+
+    function toggleAccordion(id) { document.getElementById(id)?.classList.toggle('open'); }
+
+   function renderReports() {
+  const type = document.getElementById('report-filter-type').value;
+  const container = document.getElementById('report-results');
+  container.innerHTML = '';
+
+  if (logs.length === 0) return container.innerHTML = '<div style="text-align:center; padding:20px;">Geen workouts gevonden.</div>';
+
+  let cutOff = new Date();
+  if (selectedDateFilter === '1m') cutOff.setMonth(cutOff.getMonth() - 1);
+  else if (selectedDateFilter === '3m') cutOff.setMonth(cutOff.getMonth() - 3);
+  else if (selectedDateFilter === '6m') cutOff.setMonth(cutOff.getMonth() - 6);
+  else if (selectedDateFilter === '1y') cutOff.setFullYear(cutOff.getFullYear() - 1);
+  else cutOff = new Date(0);
+
+  const fLogs = logs.filter(l => new Date(l.date) >= cutOff);
+
+  if (fLogs.length === 0) {
+    return container.innerHTML = '<div style="text-align:center; color:var(--text-dim); padding:20px;">Geen data gevonden in deze periode.</div>';
   }
 
-  // 3. Profielen (Fysiologie)
-  var profSheet = ss.getSheetByName("Profiles");
-  var profiles = [];
-  if (profSheet) {
-    var profData = profSheet.getDataRange().getValues();
-    for (var k = 1; k < profData.length; k++) {
-      if (!profData[k][0]) continue;
-      profiles.push({
-        id: String(profData[k][0]), date: String(profData[k][1]),
-        height: Number(profData[k][2]), weight: Number(profData[k][3]), efficiency: Number(profData[k][4])
+  // TOTAALSOM OVER DE GEHELE GEKOZEN PERIODE BEREKENEN
+  let total_period_kj = 0, total_period_kcal = 0;
+  fLogs.forEach(l => { total_period_kj += (l.work_kj||0); total_period_kcal += (l.energy_kcal||0); });
+
+  // BOVENSTE SAMENVATTINGSKAART
+  const summaryCard = document.createElement('div');
+  summaryCard.className = 'card';
+  summaryCard.style.borderLeft = '4px solid var(--energy)';
+  summaryCard.style.padding = '12px 15px';
+  summaryCard.innerHTML = `
+    <div style="font-size:0.8rem; color:var(--text-dim); text-transform:uppercase;">Totale Arbeid & Energie (${selectedDateFilter.toUpperCase()})</div>
+    <div style="font-size:1.2rem; font-weight:bold; color:var(--energy); margin-top:2px;">
+      ⚡ ${total_period_kj.toFixed(0)} kJ <span style="font-size:0.9rem; font-weight:normal; color:var(--text);">(${total_period_kcal.toFixed(0)} kcal verbrand)</span>
+    </div>
+  `;
+  container.appendChild(summaryCard);
+
+  // 1. PER SESSIE WEERGAVE
+  if (type === 'session') {
+    const grouped = {};
+    fLogs.forEach(l => { if(!grouped[l.workoutId]) grouped[l.workoutId] = []; grouped[l.workoutId].push(l); });
+    
+    Object.keys(grouped).reverse().forEach(wId => {
+      const sLogs = grouped[wId];
+      let sess_kj = 0, sess_kcal = 0;
+      sLogs.forEach(l => { sess_kj += (l.work_kj||0); sess_kcal += (l.energy_kcal||0); });
+
+      const header = document.createElement('div');
+      header.className = 'accordion-header';
+      header.onclick = () => toggleAccordion(`acc-${wId}`);
+      header.innerHTML = `
+        <div style="width:100%;">
+          <div style="display:flex; justify-content:space-between;">
+            <span>Sessie ${wId}</span> <span>▼</span>
+          </div>
+          <div style="font-size:0.75rem; color:var(--text-dim); font-weight:normal; margin-top:2px;">
+            ${sLogs[0].date} | ${sLogs.length} sets 
+            <span class="badge badge-energy" style="float:right;">${sess_kj.toFixed(0)} kJ | ${sess_kcal.toFixed(0)} kcal</span>
+          </div>
+        </div>`;
+
+      const content = document.createElement('div'); content.className = 'accordion-content'; content.id = `acc-${wId}`;
+      let html = '';
+      sLogs.forEach(l => {
+        html += `<div style="font-size:0.85rem; margin-bottom:8px; border-bottom: 1px solid #2a2a2a; padding-bottom: 6px;">
+          <div style="display:flex; justify-content:space-between;">
+            <strong>${l.exerciseName}</strong> 
+            <span style="font-size:0.7rem; color:var(--energy);"><span id="lbl-w-${l.id}">${(l.work_kj||0).toFixed(1)} kJ</span> / <span id="lbl-e-${l.id}">${(l.energy_kcal||0).toFixed(1)} kcal</span></span>
+          </div>
+          <div style="display:flex; gap:6px; margin-top:4px; align-items:center;">
+            <input type="text" id="edit-p-${l.id}" value="${l.primaryValue||''}" class="edit-input" placeholder="R/M" onchange="autoSaveLogEdit(${l.id})">
+            <input type="text" id="edit-w-${l.id}" value="${l.weightValue||''}" class="edit-input" placeholder="KG" onchange="autoSaveLogEdit(${l.id})">
+            <input type="text" id="edit-e-${l.id}" value="${l.extraValue||''}" class="edit-input" placeholder="Tijd" onchange="autoSaveLogEdit(${l.id})">
+            <button class="btn-icon" onclick="deleteSingleLog(${l.id})">🗑️</button>
+          </div>
+        </div>`;
       });
-    }
+      html += `<button class="btn btn-danger" style="margin-top:10px; padding:6px; font-size:0.8rem;" onclick="deleteSession('${wId}')">Sessie Wissen</button>`;
+      content.innerHTML = html;
+      container.appendChild(header); container.appendChild(content);
+    });
+  } 
+  // 2. PER OEFENING WEERGAVE
+  else if (type === 'exercise') {
+    const exId = document.getElementById('report-exercise-select').value;
+    const currentEx = exercises.find(e => e.id === exId);
+    const eLogs = fLogs.filter(l => l.exerciseId === exId).reverse();
+    
+    let ex_kj = 0, ex_kcal = 0;
+    eLogs.forEach(l => { ex_kj += (l.work_kj||0); ex_kcal += (l.energy_kcal||0); });
+
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML = `
+      <h3>${currentEx ? (currentEx.icon||'🏋️') + ' ' + currentEx.name : ''}</h3>
+      <p style="font-size:0.8rem; color:var(--text-dim); margin-bottom:10px;">
+        Totaal voor deze oefening: <strong style="color:var(--energy);">${ex_kj.toFixed(0)} kJ / ${ex_kcal.toFixed(0)} kcal</strong>
+      </p>
+      ${eLogs.length>0 ? `<table class="report-table">
+        <thead><tr><th>Set</th><th>Reps/M</th><th>KG/St</th><th>Arbeid/Energie</th></tr></thead>
+        <tbody>${eLogs.map(l => `<tr>
+          <td>${l.date.substring(5)}<br>#${l.setNum}</td>
+          <td>${l.primaryValue||'-'}</td><td>${l.weightValue||'BW'}</td>
+          <td style="color:var(--energy); font-weight:bold;">${(l.work_kj||0).toFixed(0)} kJ<br>${(l.energy_kcal||0).toFixed(0)} kcal</td>
+        </tr>`).join('')}</tbody></table>` : '<div style="color:var(--text-dim);font-size:0.85rem;">Geen data in deze periode.</div>'}
+    `;
+    container.appendChild(card);
   }
-  
-  return ContentService.createTextOutput(JSON.stringify({ status: "success", logs: logs, exercises: exercises, profiles: profiles }))
-    .setMimeType(ContentService.MimeType.JSON);
+  // 3. HYROX WEERGAVE
+  else if (type === 'hyrox') {
+    const hyroxStations = exercises.filter(e => e.isHyrox && e.isStation);
+
+    hyroxStations.forEach(st => {
+      let stLogs = fLogs.filter(l => l.exerciseId === st.id).reverse();
+      let st_kj = 0, st_kcal = 0;
+      stLogs.forEach(l => { st_kj += (l.work_kj||0); st_kcal += (l.energy_kcal||0); });
+
+      const header = document.createElement('div');
+      header.className = 'accordion-header';
+      header.onclick = () => toggleAccordion(`acc-hyrox-${st.id}`);
+      header.innerHTML = `
+        <div style="width:100%;">
+          <div style="display:flex; justify-content:space-between;">
+            <span>${st.icon || ''} ${st.name}</span> <span>▼</span>
+          </div>
+          <div style="font-size:0.75rem; color:var(--text-dim); font-weight:normal; margin-top:2px;">
+            ${st.target} | ${stLogs.length} resultaten
+            <span class="badge badge-energy" style="float:right;">${st_kj.toFixed(0)} kJ | ${st_kcal.toFixed(0)} kcal</span>
+          </div>
+        </div>
+      `;
+
+      const content = document.createElement('div');
+      content.className = 'accordion-content';
+      content.id = `acc-hyrox-${st.id}`;
+
+      if (stLogs.length > 0) {
+        content.innerHTML = `
+          <table class="report-table">
+            <thead>
+              <tr>
+                <th>Datum</th>
+                <th>Afstand/Reps</th>
+                <th>KG/Stand</th>
+                <th>Tijd</th>
+                <th>Arbeid</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${stLogs.map(l => `
+                <tr>
+                  <td>${l.date.substring(5)}</td>
+                  <td>${l.primaryValue || '-'}</td>
+                  <td>${l.weightValue ? l.weightValue + (st.volume === 'hyrox_erg' ? ' (st)' : ' kg') : 'BW'}</td>
+                  <td><strong>${l.extraValue || '-'}</strong></td>
+                  <td style="color:var(--energy); font-weight:bold;">${(l.work_kj||0).toFixed(0)} kJ</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      } else {
+        content.innerHTML = `<div style="color:var(--text-dim); font-size:0.85rem;">Geen resultaten gevonden in deze periode.</div>`;
+      }
+
+      container.appendChild(header);
+      container.appendChild(content);
+    });
+  }
 }
 
-function doPost(e) {
-  try {
-    var contents = JSON.parse(e.postData.contents);
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    
-    // --- LOGS ---
-    if (contents.logs) {
-      var logSheet = ss.getSheetByName("Logs") || ss.insertSheet("Logs");
-      if (logSheet.getLastRow() === 0) {
-        logSheet.appendRow(["id", "workoutId", "date", "startTime", "exerciseId", "exerciseName", "setNum", "primaryValue", "weightValue", "extraValue", "notes", "work_kj", "energy_kcal"]);
-      }
-      var existingLogs = logSheet.getDataRange().getValues();
-      var logMap = {};
-      for (var i = 1; i < existingLogs.length; i++) { if (existingLogs[i][0]) logMap[String(existingLogs[i][0])] = existingLogs[i]; }
-      
-      contents.logs.forEach(function(l) {
-        logMap[String(l.id)] = [
-          String(l.id), String(l.workoutId||''), String(l.date||''), String(l.startTime||''), String(l.exerciseId||''),
-          String(l.exerciseName||''), Number(l.setNum||1), String(l.primaryValue||''), String(l.weightValue||''),
-          String(l.extraValue||''), String(l.notes||''), Number(l.work_kj||0), Number(l.energy_kcal||0)
-        ];
-      });
-      
-      logSheet.clearContents();
-      logSheet.appendRow(["id", "workoutId", "date", "startTime", "exerciseId", "exerciseName", "setNum", "primaryValue", "weightValue", "extraValue", "notes", "work_kj", "energy_kcal"]);
-      var logRows = Object.keys(logMap).map(function(k) { return logMap[k]; });
-      if (logRows.length > 0) logSheet.getRange(2, 1, logRows.length, 13).setValues(logRows);
-    }
-    
-    // --- EXERCISES ---
-    if (contents.exercises) {
-      var exSheet = ss.getSheetByName("Exercises") || ss.insertSheet("Exercises");
-      if (exSheet.getLastRow() === 0) {
-        exSheet.appendRow(["id", "name", "volume", "weight", "isHyrox", "isStation", "target", "notes", "icon", "formula"]);
-      }
-      var existingEx = exSheet.getDataRange().getValues();
-      var exMap = {};
-      for (var j = 1; j < existingEx.length; j++) { if (existingEx[j][0]) exMap[String(existingEx[j][0])] = existingEx[j]; }
-      
-      contents.exercises.forEach(function(x) {
-        exMap[String(x.id)] = [
-          String(x.id), String(x.name||''), String(x.volume||''), String(x.weight||''), x.isHyrox?"true":"false",
-          x.isStation?"true":"false", String(x.target||''), String(x.notes||''), String(x.icon||'🏋️'), String(x.formula||'')
-        ];
-      });
-      
-      exSheet.clearContents();
-      exSheet.appendRow(["id", "name", "volume", "weight", "isHyrox", "isStation", "target", "notes", "icon", "formula"]);
-      var exRows = Object.keys(exMap).map(function(k) { return exMap[k]; });
-      if (exRows.length > 0) exSheet.getRange(2, 1, exRows.length, 10).setValues(exRows);
+    function saveGoogleUrl() {
+      localStorage.setItem('gt_google_url', document.getElementById('google-script-url').value);
+      updateSyncBadge('URL Opgeslagen');
     }
 
-    // --- PROFILES ---
-    if (contents.profiles) {
-      var profSheet = ss.getSheetByName("Profiles") || ss.insertSheet("Profiles");
-      if (profSheet.getLastRow() === 0) {
-        profSheet.appendRow(["id", "date", "height", "weight", "efficiency"]);
-      }
-      var existingProf = profSheet.getDataRange().getValues();
-      var profMap = {};
-      for (var k = 1; k < existingProf.length; k++) { if (existingProf[k][0]) profMap[String(existingProf[k][0])] = existingProf[k]; }
-      
-      contents.profiles.forEach(function(p) {
-        profMap[String(p.id)] = [ String(p.id), String(p.date||''), Number(p.height||1.97), Number(p.weight||87), Number(p.efficiency||0.23) ];
-      });
-      
-      profSheet.clearContents();
-      profSheet.appendRow(["id", "date", "height", "weight", "efficiency"]);
-      var profRows = Object.keys(profMap).map(function(k) { return profMap[k]; });
-      if (profRows.length > 0) profSheet.getRange(2, 1, profRows.length, 5).setValues(profRows);
+    async function uploadDataToCloud(silent = true) {
+      const url = localStorage.getItem('gt_google_url') || DEFAULT_GOOGLE_URL;
+      if (!url) return;
+      updateSyncBadge('🟡 Syncing...');
+      try {
+        await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify({ type: 'SYNC_ALL', logs: logs, exercises: exercises, profiles: profiles }), redirect: 'follow'
+        });
+        updateSyncBadge('🟢 Synchroon');
+      } catch (err) { updateSyncBadge('🔴 Sync Fout'); }
     }
-    
-    return ContentService.createTextOutput(JSON.stringify({ status: "success" })).setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() })).setMimeType(ContentService.MimeType.JSON);
-  }
-}
+
+    async function downloadDataFromCloud(silent = false) {
+      const url = localStorage.getItem('gt_google_url') || DEFAULT_GOOGLE_URL;
+      if (!url) return;
+      if (!silent) updateSyncBadge('🟡 Ophalen...');
+      try {
+        const res = await fetch(url, { method: 'GET', redirect: 'follow' });
+        if (!res.ok) throw new Error('HTTP Fout');
+        const data = await res.json();
+        
+        if (data.logs) logs = mergeData(logs, data.logs);
+        if (data.exercises) exercises = mergeData(exercises, data.exercises);
+        if (data.profiles) profiles = mergeData(profiles, data.profiles);
+        
+        localStorage.setItem('gt_logs', JSON.stringify(logs));
+        localStorage.setItem('gt_exercises', JSON.stringify(exercises));
+        localStorage.setItem('gt_profiles', JSON.stringify(profiles));
+
+        populateProfileUI(); renderExerciseList(); populateReportExerciseSelect(); renderReports(); renderRecentTiles();
+        uploadDataToCloud(true);
+        updateSyncBadge('🟢 Synchroon');
+      } catch (err) { updateSyncBadge('🔴 Sync Fout'); }
+    }
+
+    function clearAllData() {
+      if (confirm('Alle lokale data wissen?')) { localStorage.clear(); location.reload(); }
+    }
+  </script>
+</body>
+</html>
