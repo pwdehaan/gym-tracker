@@ -17,13 +17,12 @@
     .header-badges { display: flex; gap: 6px; align-items: center; }
     .container { padding: 15px; max-width: 600px; margin: 0 auto; }
     
-    /* VASTEZITTENDE ONDERSTE MENU-BALK (KOGELVRIJE FALLBACK VOOR IOS) */
     .nav-bar { 
       position: fixed; bottom: 0; left: 0; right: 0; 
       background-color: var(--card-bg); border-top: 1px solid var(--border); 
       display: flex; justify-content: space-around; 
       padding-top: 12px; 
-      padding-bottom: 12px; /* Fallback voor als safe-area stuk gaat */
+      padding-bottom: 12px; 
       padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); 
       z-index: 99999; 
     }
@@ -82,7 +81,7 @@
 <body>
 
   <header>
-    <h1>Gym Tracker <span class="app-version">v1.2</span></h1>
+    <h1>Gym Tracker <span class="app-version">v1.3</span></h1>
     <div class="header-badges">
       <span id="sync-status-badge" class="badge badge-sync">🟡 Laden...</span>
       <span id="active-session-badge" class="badge" style="display:none; background: var(--success); color: black;">Workout Actief</span>
@@ -318,101 +317,7 @@
       { id: 'p1', date: '2024-01-01', height: 1.97, weight: 87.0, efficiency: 0.23 }
     ];
 
-    // DE COMPLETE OEFENINGEN BIBLIOTHEEK (Voor Auto-Repair)
-    const DEFAULT_EXERCISES = [
-      { id: 'h1', category: 'hyrox', name: 'Hardlopen (Hyrox)', volume: 'hyrox_all', weight: 'bw', isHyrox: true, isStation: false, target: '1000m', notes: '', icon: '🏃', formula: 'P * BW * 0.001' },
-      { id: 'h2', category: 'hyrox', name: 'SkiErg (Hyrox)', volume: 'hyrox_erg', weight: 'bw', isHyrox: true, isStation: true, target: '1000m', notes: '', icon: '🎿', formula: 'P * 0.090' },
-      { id: 'h3', category: 'hyrox', name: 'Sled Push (Hyrox)', volume: 'hyrox_all', weight: 'kg', isHyrox: true, isStation: true, target: '50m @ 152 kg', notes: '', icon: '🛷', formula: '(isMeters ? P : P*1) * (K + 20) * 0.00392' },
-      { id: 'h4', category: 'hyrox', name: 'Sled Pull (Hyrox)', volume: 'hyrox_all', weight: 'kg', isHyrox: true, isStation: true, target: '50m @ 103 kg', notes: '', icon: '🛷', formula: '(isMeters ? P : P*1) * K * 0.00392' },
-      { id: 'h5', category: 'hyrox', name: 'Burpee Broad Jumps', volume: 'hyrox_all', weight: 'bw', isHyrox: true, isStation: true, target: '80m', notes: '', icon: '🤸', formula: '(isMeters ? P / 1.25 : P) * BW * 0.0068' },
-      { id: 'h6', category: 'hyrox', name: 'Roeien / RowErg (Hyrox)', volume: 'hyrox_erg', weight: 'bw', isHyrox: true, isStation: true, target: '1000m', notes: '', icon: '🚣', formula: 'P * 0.090' },
-      { id: 'h7', category: 'hyrox', name: 'Farmers Carry', volume: 'hyrox_all', weight: 'kg', isHyrox: true, isStation: true, target: '200m @ 2x24 kg', notes: '', icon: '🏋️', formula: '(isMeters ? P : P*1) * (K + BW) * 0.00041' },
-      { id: 'h8', category: 'hyrox', name: 'Sandbag Lunges', volume: 'hyrox_all', weight: 'kg', isHyrox: true, isStation: true, target: '100m @ 20 kg', notes: '', icon: '🎒', formula: '(isMeters ? P : P*1) * (K + BW * 0.8) * 0.00638' },
-      { id: 'h9', category: 'hyrox', name: 'Wall Balls', volume: 'hyrox_all', weight: 'kg', isHyrox: true, isStation: true, target: '100 reps @ 6 kg', notes: '', icon: '🎯', formula: 'P * (0.444 + K * 0.00932)' },
-      
-      { id: 'cf1', category: 'functional', name: 'Box Jumps', volume: 'reps', weight: 'bw', isHyrox: false, isStation: false, icon: '🤸', formula: 'P * BW * (E || 0.6) * 0.00981' },
-      { id: 'cf2', category: 'functional', name: 'Muscle Up (Bar/Ring)', volume: 'reps', weight: 'bw', isHyrox: false, isStation: false, icon: '🤸', formula: 'P * BW * 0.012' },
-      { id: 'cf3', category: 'functional', name: 'Pull Up (Kipping/Butterfly)', volume: 'reps', weight: 'bw', isHyrox: false, isStation: false, icon: '💪', formula: 'P * BW * 0.005' },
-      { id: 'cf4', category: 'functional', name: 'Toes to Bar (T2B)', volume: 'reps', weight: 'bw', isHyrox: false, isStation: false, icon: '🤸', formula: 'P * BW * 0.003' },
-      { id: 'cf5', category: 'functional', name: 'Wall Walk', volume: 'reps', weight: 'bw', isHyrox: false, isStation: false, icon: '🤸', formula: 'P * BW * 0.008' },
-      { id: 'cf6', category: 'functional', name: 'Handstand Push Up (HSPU)', volume: 'reps', weight: 'bw', isHyrox: false, isStation: false, icon: '💪', formula: 'P * BW * 0.005' },
-      { id: 'cf7', category: 'functional', name: 'Double Unders', volume: 'reps', weight: 'bw', isHyrox: false, isStation: false, icon: '🏃', formula: 'P * BW * 0.0008' },
-      { id: 'cf8', category: 'functional', name: 'Rope Climb', volume: 'reps', weight: 'bw', isHyrox: false, isStation: false, icon: '💪', formula: 'P * BW * (E || 4.5) * 0.00981' },
-      { id: 'cf9', category: 'functional', name: 'Dumbbell Snatch', volume: 'reps', weight: 'kg', isHyrox: false, isStation: false, icon: '🏋️', formula: 'P * K * 2.0 * 0.00981' },
-      { id: 'cf10', category: 'functional', name: 'Sandbag Clean', volume: 'reps', weight: 'kg', isHyrox: false, isStation: false, icon: '🎒', formula: 'P * K * 1.5 * 0.00981' },
-      { id: 'cf11', category: 'functional', name: 'Tire Flip', volume: 'reps', weight: 'kg', isHyrox: false, isStation: false, icon: '🏋️', formula: 'P * K * 0.5 * 0.00981' },
-      { id: 'cf12', category: 'functional', name: 'Bear Crawl', volume: 'meters', weight: 'bw', isHyrox: false, isStation: false, icon: '🤸', formula: 'P * BW * 0.003' },
-      { id: 'cf13', category: 'functional', name: 'Kettlebell Swing', volume: 'reps', weight: 'kg', isHyrox: false, isStation: false, icon: '🏋️', formula: 'P * K * 1.2 * 0.00981' },
-      { id: 'cf14', category: 'functional', name: 'Turkish Get Up', volume: 'reps', weight: 'kg', isHyrox: false, isStation: false, icon: '🤸', formula: 'P * (BW*0.5 + K) * 1.0 * 0.00981' },
-      { id: 'cf15', category: 'functional', name: 'Thruster', volume: 'reps', weight: 'kg', isHyrox: false, isStation: false, icon: '🏋️', formula: 'P * (BW*0.8 + K) * (H*0.8) * 0.00981' },
-      { id: 'cf16', category: 'functional', name: 'Pistol Squat', volume: 'reps', weight: 'bw', isHyrox: false, isStation: false, icon: '🦵', formula: 'P * BW * (H*0.4) * 0.00981' },
-      { id: 'cf17', category: 'functional', name: 'GHD Situp', volume: 'reps', weight: 'bw', isHyrox: false, isStation: false, icon: '🤸', formula: 'P * BW * 0.004' },
-      { id: 'cf18', category: 'functional', name: 'Ring Dip', volume: 'reps', weight: 'bw', isHyrox: false, isStation: false, icon: '💪', formula: 'P * BW * 0.005' },
-      { id: 'cf19', category: 'functional', name: 'Assault Bike / Echo Bike', volume: 'hyrox_erg', weight: 'bw', isHyrox: false, isStation: false, icon: '🚴', formula: 'P * 0.05' },
-      { id: 'cf20', category: 'functional', name: 'Air Runner / Treadmill', volume: 'meters', weight: 'bw', isHyrox: false, isStation: false, icon: '🏃', formula: 'P * BW * 0.0012' },
-
-      { id: 'fw1', category: 'freeweight', name: 'Barbell Back Squat', volume: 'reps', weight: 'kg', icon: '🦵', formula: 'P * (BW*0.8 + K) * (H*0.4) * 0.00981' },
-      { id: 'fw2', category: 'freeweight', name: 'Barbell Front Squat', volume: 'reps', weight: 'kg', icon: '🦵', formula: 'P * (BW*0.8 + K) * (H*0.4) * 0.00981' },
-      { id: 'fw3', category: 'freeweight', name: 'Barbell Deadlift', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * (H*0.4) * 0.00981' },
-      { id: 'fw4', category: 'freeweight', name: 'Sumo Deadlift', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * (H*0.35) * 0.00981' },
-      { id: 'fw5', category: 'freeweight', name: 'Romanian Deadlift (RDL)', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * (H*0.35) * 0.00981' },
-      { id: 'fw6', category: 'freeweight', name: 'Barbell Bench Press', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * 0.5 * 0.00981' },
-      { id: 'fw7', category: 'freeweight', name: 'Incline Bench Press', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * 0.55 * 0.00981' },
-      { id: 'fw8', category: 'freeweight', name: 'Overhead Press (OHP)', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * 0.6 * 0.00981' },
-      { id: 'fw9', category: 'freeweight', name: 'Push Press', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * 0.65 * 0.00981' },
-      { id: 'fw10', category: 'freeweight', name: 'Pendlay Row / Barbell Row', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * 0.5 * 0.00981' },
-      { id: 'fw11', category: 'freeweight', name: 'Barbell Biceps Curl', volume: 'reps', weight: 'kg', icon: '💪', formula: 'P * K * 0.45 * 0.00981' },
-      { id: 'fw12', category: 'freeweight', name: 'Skullcrusher', volume: 'reps', weight: 'kg', icon: '💪', formula: 'P * K * 0.4 * 0.00981' },
-      { id: 'fw13', category: 'freeweight', name: 'Power Clean', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * 1.2 * 0.00981' },
-      { id: 'fw14', category: 'freeweight', name: 'Clean & Jerk', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * 2.1 * 0.00981' },
-      { id: 'fw15', category: 'freeweight', name: 'Barbell Snatch', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * 2.1 * 0.00981' },
-      { id: 'fw16', category: 'freeweight', name: 'Split Jerk', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * 0.8 * 0.00981' },
-      { id: 'fw17', category: 'freeweight', name: 'Barbell Hip Thrust', volume: 'reps', weight: 'kg', icon: '🦵', formula: 'P * K * 0.3 * 0.00981' },
-      { id: 'fw18', category: 'freeweight', name: 'Good Morning', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * 0.4 * 0.00981' },
-      { id: 'fw19', category: 'freeweight', name: 'Barbell Shrugs', volume: 'reps', weight: 'kg', icon: '💪', formula: 'P * K * 0.1 * 0.00981' },
-      { id: 'fw20', category: 'freeweight', name: 'Dumbbell Goblet Squat', volume: 'reps', weight: 'kg', icon: '🦵', formula: 'P * (BW*0.8 + K) * (H*0.4) * 0.00981' },
-      { id: 'fw21', category: 'freeweight', name: 'Dumbbell Walking Lunge', volume: 'reps', weight: 'kg', icon: '🦵', formula: 'P * (BW*0.8 + K) * 0.65 * 0.00981' },
-      { id: 'fw22', category: 'freeweight', name: 'Dumbbell Bench Press', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * 0.5 * 0.00981' },
-      { id: 'fw23', category: 'freeweight', name: 'Dumbbell Incline Press', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * 0.55 * 0.00981' },
-      { id: 'fw24', category: 'freeweight', name: 'Dumbbell Chest Fly', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * 0.4 * 0.00981' },
-      { id: 'fw25', category: 'freeweight', name: 'Dumbbell Shoulder Press', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * 0.6 * 0.00981' },
-      { id: 'fw26', category: 'freeweight', name: 'Dumbbell Lateral Raise', volume: 'reps', weight: 'kg', icon: '💪', formula: 'P * K * 0.5 * 0.00981' },
-      { id: 'fw27', category: 'freeweight', name: 'Dumbbell Front Raise', volume: 'reps', weight: 'kg', icon: '💪', formula: 'P * K * 0.5 * 0.00981' },
-      { id: 'fw28', category: 'freeweight', name: 'Dumbbell Row', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * 0.5 * 0.00981' },
-      { id: 'fw29', category: 'freeweight', name: 'Dumbbell Pullover', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * 0.6 * 0.00981' },
-      { id: 'fw30', category: 'freeweight', name: 'Dumbbell Biceps Curl', volume: 'reps', weight: 'kg', icon: '💪', formula: 'P * K * 0.45 * 0.00981' },
-      { id: 'fw31', category: 'freeweight', name: 'Hammer Curl', volume: 'reps', weight: 'kg', icon: '💪', formula: 'P * K * 0.45 * 0.00981' },
-      { id: 'fw32', category: 'freeweight', name: 'Dumbbell Triceps Extension', volume: 'reps', weight: 'kg', icon: '💪', formula: 'P * K * 0.4 * 0.00981' },
-      { id: 'fw33', category: 'freeweight', name: 'Dumbbell Step Up', volume: 'reps', weight: 'kg', icon: '🦵', formula: 'P * (BW*0.9 + K) * (E || 0.4) * 0.00981' },
-      { id: 'fw34', category: 'freeweight', name: 'Bulgarian Split Squat', volume: 'reps', weight: 'kg', icon: '🦵', formula: 'P * (BW*0.8 + K) * (H*0.4) * 0.00981' },
-      { id: 'fw35', category: 'freeweight', name: 'Kettlebell Goblet Squat', volume: 'reps', weight: 'kg', icon: '🦵', formula: 'P * (BW*0.8 + K) * (H*0.4) * 0.00981' },
-      { id: 'fw36', category: 'freeweight', name: 'Kettlebell Clean', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * 1.0 * 0.00981' },
-      { id: 'fw37', category: 'freeweight', name: 'Kettlebell Press', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * 0.6 * 0.00981' },
-      { id: 'fw38', category: 'freeweight', name: 'Kettlebell Snatch', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * 2.0 * 0.00981' },
-      { id: 'fw39', category: 'freeweight', name: 'Kettlebell Windmill', volume: 'reps', weight: 'kg', icon: '🤸', formula: 'P * K * 1.0 * 0.00981' },
-      { id: 'fw40', category: 'freeweight', name: 'Triceps Dip (Weighted)', volume: 'reps', weight: 'kg', icon: '💪', formula: 'P * (BW + K) * 0.5 * 0.00981' },
-
-      { id: 'm1', category: 'machine', name: 'Leg Press (Machine)', volume: 'reps', weight: 'kg', icon: '🦵', formula: 'P * K * 0.5 * 0.00981' },
-      { id: 'm2', category: 'machine', name: 'Hack Squat (Machine)', volume: 'reps', weight: 'kg', icon: '🦵', formula: 'P * K * 0.6 * 0.00981' },
-      { id: 'm3', category: 'machine', name: 'Leg Extension', volume: 'reps', weight: 'kg', icon: '🦵', formula: 'P * K * 0.35 * 0.00981' },
-      { id: 'm4', category: 'machine', name: 'Seated Leg Curl', volume: 'reps', weight: 'kg', icon: '🦵', formula: 'P * K * 0.35 * 0.00981' },
-      { id: 'm5', category: 'machine', name: 'Lying Leg Curl', volume: 'reps', weight: 'kg', icon: '🦵', formula: 'P * K * 0.35 * 0.00981' },
-      { id: 'm6', category: 'machine', name: 'Hip Abductor (Out)', volume: 'reps', weight: 'kg', icon: '🦵', formula: 'P * K * 0.3 * 0.00981' },
-      { id: 'm7', category: 'machine', name: 'Hip Adductor (In)', volume: 'reps', weight: 'kg', icon: '🦵', formula: 'P * K * 0.3 * 0.00981' },
-      { id: 'm8', category: 'machine', name: 'Chest Press (Machine)', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * 0.5 * 0.00981' },
-      { id: 'm9', category: 'machine', name: 'Incline Chest Press', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * 0.5 * 0.00981' },
-      { id: 'm10', category: 'machine', name: 'Pec Deck / Fly Machine', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * 0.4 * 0.00981' },
-      { id: 'm11', category: 'machine', name: 'Shoulder Press (Machine)', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * 0.5 * 0.00981' },
-      { id: 'm12', category: 'machine', name: 'Lateral Raise Machine', volume: 'reps', weight: 'kg', icon: '💪', formula: 'P * K * 0.4 * 0.00981' },
-      { id: 'm13', category: 'machine', name: 'Lat Pulldown', volume: 'reps', weight: 'kg', icon: '💪', formula: 'P * K * 0.6 * 0.00981' },
-      { id: 'm14', category: 'machine', name: 'Seated Cable Row', volume: 'reps', weight: 'kg', icon: '💪', formula: 'P * K * 0.5 * 0.00981' },
-      { id: 'm15', category: 'machine', name: 'Assisted Pull-up Machine', volume: 'reps', weight: 'kg', icon: '💪', formula: 'P * (BW - K) * 0.5 * 0.00981' },
-      { id: 'm16', category: 'machine', name: 'Triceps Pushdown (Cable)', volume: 'reps', weight: 'kg', icon: '💪', formula: 'P * K * 0.4 * 0.00981' },
-      { id: 'm17', category: 'machine', name: 'Cable Biceps Curl', volume: 'reps', weight: 'kg', icon: '💪', formula: 'P * K * 0.4 * 0.00981' },
-      { id: 'm18', category: 'machine', name: 'Smith Machine Squat', volume: 'reps', weight: 'kg', icon: '🦵', formula: 'P * (BW*0.8 + K) * (H*0.4) * 0.00981' },
-      { id: 'm19', category: 'machine', name: 'Calf Raise (Machine)', volume: 'reps', weight: 'kg', icon: '🦵', formula: 'P * (BW + K) * 0.15 * 0.00981' },
-      { id: 'm20', category: 'machine', name: 'Glute Drive / Hip Thrust (Machine)', volume: 'reps', weight: 'kg', icon: '🦵', formula: 'P * K * 0.3 * 0.00981' }
-    ];
+    const DEFAULT_EXERCISES = [];
 
     let exercises = [];
     let logs = [];
@@ -434,19 +339,6 @@
       const urlInput = document.getElementById('google-script-url');
       if (urlInput) urlInput.value = localStorage.getItem('gt_google_url') || DEFAULT_GOOGLE_URL;
 
-      // AUTO-REPAIR: Mis je de 80 oefeningen? Injecteer ze dan direct lokaal!
-      let needSync = false;
-      const existingIds = exercises.map(e => e.id);
-      DEFAULT_EXERCISES.forEach(defEx => {
-         if (!existingIds.includes(defEx.id)) {
-            exercises.push(defEx);
-            needSync = true;
-         }
-      });
-      if (needSync || !localStorage.getItem('gt_exercises')) {
-         localStorage.setItem('gt_exercises', JSON.stringify(exercises));
-      }
-
       if(!localStorage.getItem('gt_profiles')) localStorage.setItem('gt_profiles', JSON.stringify(DEFAULT_PROFILES));
 
       populateProfileUI();
@@ -455,11 +347,6 @@
       populateReportExerciseSelect();
       renderRecentTiles();
       downloadDataFromCloud(true);
-
-      // Als de auto-repair zojuist getriggerd is, push hem dan stiekem door naar Google Sheets!
-      if (needSync) {
-         setTimeout(() => { uploadDataToCloud(true); }, 2000);
-      }
     };
 
     function autoSuggestFormula() {
@@ -883,174 +770,4 @@
          exercises.push(exData);
       }
 
-      localStorage.setItem('gt_exercises', JSON.stringify(exercises));
-      renderExerciseList(); populateReportExerciseSelect(); renderRecentTiles();
-      closeNewExerciseModal();
-      uploadDataToCloud(true);
-    }
-
-    function setCatFilter(cat) {
-      activeCatFilter = cat;
-      document.querySelectorAll('#tab-exercises .filter-btn').forEach(b => b.classList.remove('active'));
-      document.getElementById(`cat-${cat}`)?.classList.add('active');
-      renderExerciseList();
-    }
-
-    function renderExerciseList() {
-      const container = document.getElementById('exercise-list');
-      const query = document.getElementById('lib-search')?.value.toLowerCase() || '';
-      container.innerHTML = '';
-      
-      let filtered = exercises.filter(e => e.name.toLowerCase().includes(query));
-      if (activeCatFilter !== 'all') {
-         filtered = filtered.filter(e => (e.category || 'overig') === activeCatFilter);
-      }
-
-      filtered.forEach(ex => {
-        const card = document.createElement('div'); card.className = 'card'; card.style.padding = '10px 15px'; card.style.marginBottom = '8px';
-        card.innerHTML = `
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <div>
-              <strong>${ex.icon||'🏋️'} ${ex.name}</strong> ${ex.category === 'hyrox' ? '<span class="badge badge-hyrox">HYROX</span>' : ''}
-              <div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">
-                ${getVolumeLabel(ex.volume)} | Formule: ${ex.formula||'-'}
-              </div>
-            </div>
-            <button class="btn-icon" style="color:var(--primary); font-size:0.9rem;" onclick="editExercise('${ex.id}')">✏️ Bewerk</button>
-          </div>`;
-        container.appendChild(card);
-      });
-    }
-
-    function populateReportExerciseSelect() {
-      const select = document.getElementById('report-exercise-select');
-      select.innerHTML = '';
-      exercises.forEach(ex => {
-        const opt = document.createElement('option'); opt.value = ex.id; opt.innerText = ex.name; select.appendChild(opt);
-      });
-    }
-
-    function toggleReportFilter() {
-      const type = document.getElementById('report-filter-type').value;
-      document.getElementById('report-exercise-select-group').style.display = type === 'exercise' ? 'block' : 'none';
-      setDateFilter(type === 'session' ? '1m' : '3m');
-    }
-
-    function setDateFilter(filter) {
-      selectedDateFilter = filter;
-      document.querySelectorAll('#date-filter-container .filter-btn').forEach(b => b.classList.remove('active'));
-      document.getElementById(`btn-${filter}`)?.classList.add('active');
-      renderReports();
-    }
-
-    function toggleAccordion(id) { document.getElementById(id)?.classList.toggle('open'); }
-
-    function renderReports() {
-      const type = document.getElementById('report-filter-type').value;
-      const container = document.getElementById('report-results');
-      container.innerHTML = '';
-
-      if (logs.length === 0) return container.innerHTML = '<div style="text-align:center; padding:20px;">Geen workouts gevonden.</div>';
-
-      let cutOff = new Date();
-      if (selectedDateFilter === '1m') cutOff.setMonth(cutOff.getMonth() - 1);
-      else if (selectedDateFilter === '3m') cutOff.setMonth(cutOff.getMonth() - 3);
-      else if (selectedDateFilter === '6m') cutOff.setMonth(cutOff.getMonth() - 6);
-      else if (selectedDateFilter === '1y') cutOff.setFullYear(cutOff.getFullYear() - 1);
-      else cutOff = new Date(0);
-
-      const fLogs = logs.filter(l => new Date(l.date) >= cutOff);
-      if (fLogs.length === 0) return container.innerHTML = '<div style="text-align:center; color:var(--text-dim); padding:20px;">Geen data gevonden.</div>';
-
-      let total_period_kj = 0, total_period_kcal = 0;
-      fLogs.forEach(l => { total_period_kj += (l.work_kj||0); total_period_kcal += (l.energy_kcal||0); });
-
-      const summaryCard = document.createElement('div'); summaryCard.className = 'card'; summaryCard.style.borderLeft = '4px solid var(--energy)'; summaryCard.style.padding = '12px 15px';
-      summaryCard.innerHTML = `<div style="font-size:0.8rem; color:var(--text-dim); text-transform:uppercase;">Totale Arbeid & Energie (${selectedDateFilter.toUpperCase()})</div>
-        <div style="font-size:1.2rem; font-weight:bold; color:var(--energy); margin-top:2px;">⚡ ${total_period_kj.toFixed(0)} kJ <span style="font-size:0.9rem; font-weight:normal; color:var(--text);">(${total_period_kcal.toFixed(0)} kcal)</span></div>`;
-      container.appendChild(summaryCard);
-
-      if (type === 'session') {
-        const grouped = {};
-        fLogs.forEach(l => { if(!grouped[l.workoutId]) grouped[l.workoutId] = []; grouped[l.workoutId].push(l); });
-        Object.keys(grouped).reverse().forEach(wId => {
-          const sLogs = grouped[wId];
-          let sess_kj = 0, sess_kcal = 0;
-          sLogs.forEach(l => { sess_kj += (l.work_kj||0); sess_kcal += (l.energy_kcal||0); });
-
-          const header = document.createElement('div'); header.className = 'accordion-header'; header.onclick = () => toggleAccordion(`acc-${wId}`);
-          header.innerHTML = `<div style="width:100%;"><div style="display:flex; justify-content:space-between;"><span>Sessie ${wId}</span> <span>▼</span></div>
-            <div style="font-size:0.75rem; color:var(--text-dim); font-weight:normal; margin-top:2px;">${sLogs[0].date} | ${sLogs.length} sets <span class="badge badge-energy" style="float:right;">${sess_kj.toFixed(0)} kJ | ${sess_kcal.toFixed(0)} kcal</span></div></div>`;
-          const content = document.createElement('div'); content.className = 'accordion-content'; content.id = `acc-${wId}`;
-          let html = '';
-          sLogs.forEach(l => {
-            html += `<div style="font-size:0.85rem; margin-bottom:8px; border-bottom: 1px solid #2a2a2a; padding-bottom: 6px;">
-              <div style="display:flex; justify-content:space-between;"><strong>${l.exerciseName}</strong> <span style="font-size:0.7rem; color:var(--energy);"><span id="lbl-w-${l.id}">${(l.work_kj||0).toFixed(1)} kJ</span> / <span id="lbl-e-${l.id}">${(l.energy_kcal||0).toFixed(1)} kcal</span></span></div>
-              <div style="display:flex; gap:6px; margin-top:4px; align-items:center;">
-                <input type="text" id="edit-p-${l.id}" value="${l.primaryValue||''}" class="edit-input" placeholder="R/M" onchange="autoSaveLogEdit(${l.id})">
-                <input type="text" id="edit-w-${l.id}" value="${l.weightValue||''}" class="edit-input" placeholder="KG" onchange="autoSaveLogEdit(${l.id})">
-                <input type="text" id="edit-e-${l.id}" value="${l.extraValue||''}" class="edit-input" placeholder="E / Tijd" onchange="autoSaveLogEdit(${l.id})">
-                <button class="btn-icon" onclick="deleteSingleLog(${l.id})">🗑️</button>
-              </div></div>`;
-          });
-          html += `<button class="btn btn-danger" style="margin-top:10px; padding:6px; font-size:0.8rem;" onclick="deleteSession('${wId}')">Sessie Wissen</button>`;
-          content.innerHTML = html; container.appendChild(header); container.appendChild(content);
-        });
-      } 
-      else if (type === 'exercise') {
-        const exId = document.getElementById('report-exercise-select').value;
-        const currentEx = exercises.find(e => e.id === exId);
-        const eLogs = fLogs.filter(l => l.exerciseId === exId).reverse();
-        let ex_kj = 0, ex_kcal = 0; eLogs.forEach(l => { ex_kj += (l.work_kj||0); ex_kcal += (l.energy_kcal||0); });
-        const card = document.createElement('div'); card.className = 'card';
-        card.innerHTML = `<h3>${currentEx ? (currentEx.icon||'🏋️') + ' ' + currentEx.name : ''}</h3>
-          <p style="font-size:0.8rem; color:var(--text-dim); margin-bottom:10px;">Totaal voor deze oefening: <strong style="color:var(--energy);">${ex_kj.toFixed(0)} kJ / ${ex_kcal.toFixed(0)} kcal</strong></p>
-          ${eLogs.length>0 ? `<table class="report-table"><thead><tr><th>Set</th><th>Reps/M</th><th>KG/St</th><th>Arbeid/Energie</th></tr></thead>
-            <tbody>${eLogs.map(l => `<tr><td>${l.date.substring(5)}<br>#${l.setNum}</td><td>${l.primaryValue||'-'}</td><td>${l.weightValue||'BW'}</td><td style="color:var(--energy); font-weight:bold;">${(l.work_kj||0).toFixed(0)} kJ<br>${(l.energy_kcal||0).toFixed(0)} kcal</td></tr>`).join('')}</tbody></table>` : '<div style="color:var(--text-dim);font-size:0.85rem;">Geen data in deze periode.</div>'}
-        `; container.appendChild(card);
-      }
-    }
-
-    function saveGoogleUrl() { localStorage.setItem('gt_google_url', document.getElementById('google-script-url').value); updateSyncBadge('URL Opgeslagen'); }
-
-    async function uploadDataToCloud(silent = true) {
-      const url = localStorage.getItem('gt_google_url') || DEFAULT_GOOGLE_URL;
-      if (!url) return; updateSyncBadge('🟡 Syncing...');
-      try {
-        await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-          body: JSON.stringify({ type: 'SYNC_ALL', logs: logs, exercises: exercises, profiles: profiles }), redirect: 'follow'
-        }); updateSyncBadge('🟢 Synchroon');
-      } catch (err) { updateSyncBadge('🔴 Sync Fout'); }
-    }
-
-    async function downloadDataFromCloud(silent = false) {
-      const url = localStorage.getItem('gt_google_url') || DEFAULT_GOOGLE_URL;
-      if (!url) return; if (!silent) updateSyncBadge('🟡 Ophalen...');
-      try {
-        const res = await fetch(url, { method: 'GET', redirect: 'follow' });
-        if (!res.ok) throw new Error('HTTP Fout');
-        const data = await res.json();
-        if (data.logs) logs = mergeData(logs, data.logs);
-        
-        if (data.exercises && data.exercises.length > 0) {
-            // MERGE in plaats van botweg overschrijven:
-            const map = new Map();
-            exercises.forEach(e => map.set(String(e.id), e)); // Lokale basis
-            data.exercises.forEach(e => map.set(String(e.id), e)); // Cloud overschrijft
-            exercises = Array.from(map.values());
-        }
-        
-        if (data.profiles) profiles = mergeData(profiles, data.profiles);
-        
-        localStorage.setItem('gt_logs', JSON.stringify(logs));
-        localStorage.setItem('gt_exercises', JSON.stringify(exercises));
-        localStorage.setItem('gt_profiles', JSON.stringify(profiles));
-        populateProfileUI(); renderExerciseList(); populateReportExerciseSelect(); renderReports(); renderRecentTiles();
-        updateSyncBadge('🟢 Synchroon');
-      } catch (err) { updateSyncBadge('🔴 Sync Fout'); }
-    }
-
-    function clearAllData() { if (confirm('Alle lokale data wissen?')) { localStorage.clear(); location.reload(); } }
-  </script>
-</body>
-</html>
+      localStorage.setItem('gt_exercises', JSON.stringify(exercises
