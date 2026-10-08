@@ -217,6 +217,11 @@
           <label>Google Web-App URL:</label>
           <input type="url" id="google-script-url" placeholder="https://script.google.com/macros/s/.../exec">
         </div>
+        <div class="form-group">
+          <label for="google-api-key">API-sleutel:</label>
+          <input type="password" id="google-api-key" autocomplete="new-password">
+          <p style="font-size:0.75rem; color:var(--text-dim); margin-top:5px;">Wordt alleen in deze browser opgeslagen, niet in de broncode. GET-verzoeken bevatten de sleutel in de URL; browsergebruikers kunnen haar inspecteren.</p>
+        </div>
         <button class="btn" onclick="saveGoogleUrl()">Koppeling Opslaan & Testen</button>
         <div id="sync-status-details" style="font-size:0.85rem; margin-top:10px; text-align:center;"></div>
       </div>
@@ -346,6 +351,8 @@
 
       const urlInput = document.getElementById('google-script-url');
       if (urlInput) urlInput.value = localStorage.getItem('gt_google_url') || DEFAULT_GOOGLE_URL;
+      const apiKeyInput = document.getElementById('google-api-key');
+      if (apiKeyInput) apiKeyInput.value = localStorage.getItem('gt_google_api_key') || '';
       
       if(!localStorage.getItem('gt_profiles')) localStorage.setItem('gt_profiles', JSON.stringify(DEFAULT_PROFILES));
 
@@ -1149,14 +1156,16 @@
     }
 
     function saveGoogleUrl() {
-        const uEl = document.getElementById('google-script-url');
-        if(uEl) {
-           const cleanUrl = sanitizeGoogleUrl(uEl.value);
-           uEl.value = cleanUrl;
-           localStorage.setItem('gt_google_url', cleanUrl);
-        }
-        updateSyncBadge('URL Opgeslagen');
-        downloadDataFromCloud(false);
+      const urlInput = document.getElementById('google-script-url');
+      const apiKeyInput = document.getElementById('google-api-key');
+      const cleanUrl = sanitizeGoogleUrl(urlInput ? urlInput.value : '');
+      const apiKey = apiKeyInput ? apiKeyInput.value.trim() : '';
+
+      if (urlInput) urlInput.value = cleanUrl;
+      localStorage.setItem('gt_google_url', cleanUrl);
+      localStorage.setItem('gt_google_api_key', apiKey);
+      updateSyncBadge('Instellingen opgeslagen');
+      downloadDataFromCloud(false);
     }
 
     async function fetchWithTimeout(url, options) {
@@ -1172,10 +1181,16 @@
     async function uploadDataToCloud(silent = true) {
       const rawUrl = localStorage.getItem('gt_google_url') || DEFAULT_GOOGLE_URL;
       if (!rawUrl) { updateSyncBadge('⚪ Alleen lokaal'); return; }
+      const apiKey = localStorage.getItem('gt_google_api_key') || '';
+      if (!apiKey) {
+        updateSyncBadge('🔴 API-sleutel ontbreekt; gegevens blijven lokaal.');
+        if (!silent) alert('Vul eerst de API-sleutel in bij Instellingen.');
+        return;
+      }
 
       const url = sanitizeGoogleUrl(rawUrl);
       if (!silent) updateSyncBadge('🟡 Syncing...');
-      const payload = JSON.stringify({ type: 'SYNC_ALL', logs: logs, exercises: exercises, profiles: profiles });
+      const payload = JSON.stringify({ type: 'SYNC_ALL', key: apiKey, logs: logs, exercises: exercises, profiles: profiles });
       let lastError;
 
       for (let attempt = 0; attempt < 2; attempt++) {
@@ -1220,13 +1235,20 @@
     async function downloadDataFromCloud(silent = false) {
       const rawUrl = localStorage.getItem('gt_google_url') || DEFAULT_GOOGLE_URL;
       if (!rawUrl) { updateSyncBadge('⚪ Alleen lokaal'); return; }
+      const apiKey = localStorage.getItem('gt_google_api_key') || '';
+      if (!apiKey) {
+        updateSyncBadge('🔴 API-sleutel ontbreekt; gegevens blijven lokaal.');
+        return;
+      }
 
-      const url = sanitizeGoogleUrl(rawUrl);
       if (!silent) updateSyncBadge('🟡 Ophalen...');
 
       let lastError;
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
+          const requestUrl = new URL(sanitizeGoogleUrl(rawUrl));
+          requestUrl.searchParams.set('key', apiKey);
+          const url = requestUrl.toString();
           const res = await fetchWithTimeout(url, { method: 'GET', redirect: 'follow' });
           if (!res.ok) throw new Error('HTTP ' + res.status);
 
@@ -1237,6 +1259,9 @@
           } catch(e) {
              console.error("Download payload fout:", text);
              throw new Error("Geen geldige data ontvangen (controleer publicatie).");
+          }
+          if (data.status !== 'success') {
+            throw new Error(data.message || 'Apps Script gaf een fout terug.');
           }
 
           if (data.logs) logs = mergeData(logs, data.logs);
