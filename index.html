@@ -80,7 +80,7 @@
 <body>
 
   <header>
-    <h1>Gym Tracker <span class="app-version">v1.6</span></h1>
+    <h1>Gym Tracker <span class="app-version">v1.7</span></h1>
     <div class="header-badges">
       <span id="sync-status-badge" class="badge badge-sync">🟢 Klaar</span>
       <span id="active-session-badge" class="badge" style="display:none; background: var(--success); color: black;">Workout Actief</span>
@@ -360,7 +360,6 @@
       }, 500);
     };
 
-    // Helper: auto-fix incorrectly pasted Google URLs (change /edit to /exec)
     function sanitizeGoogleUrl(rawUrl) {
       if (!rawUrl) return '';
       let cleaned = rawUrl.trim();
@@ -726,5 +725,543 @@
         if (!selectedExerciseForWorkout) return;
         const notesEl = document.getElementById('ex-notes-input');
         selectedExerciseForWorkout.notes = notesEl ? notesEl.value : '';
-        
-        const index = exercises.findIndex(
+
+        const index = exercises.findIndex(function(e) { return e && e.id === selectedExerciseForWorkout.id; });
+        if (index !== -1) {
+          exercises[index].notes = selectedExerciseForWorkout.notes;
+          localStorage.setItem('gt_exercises', JSON.stringify(exercises));
+          uploadDataToCloud(true);
+        }
+      } catch(e){}
+    }
+
+    function initSetRows() {
+      const cont = document.getElementById('sets-container');
+      if(cont) cont.innerHTML = '';
+      addSetRow();
+    }
+
+    function addSetRow() {
+      try {
+        const container = document.getElementById('sets-container');
+        if(!container) return;
+
+        const ex = selectedExerciseForWorkout;
+        if(!ex) return;
+
+        let lastP = '', lastW = '', lastE = '';
+        const rows = container.querySelectorAll('.set-row');
+
+        if (rows.length > 0) {
+          const lr = rows[rows.length - 1];
+          const pEl = lr.querySelector('.set-primary');
+          const wEl = lr.querySelector('.set-weight');
+          const eEl = lr.querySelector('.set-extra');
+          lastP = pEl ? pEl.value : '';
+          lastW = wEl ? wEl.value : '';
+          lastE = eEl ? eEl.value : '';
+        }
+
+        const row = document.createElement('div'); row.className = 'set-row';
+        let html = '<span style="width:25px; color:var(--text-dim); font-size:0.85rem;">#' + (rows.length + 1) + '</span>';
+
+        if (ex.volume === 'hyrox_erg') {
+          html += '<input type="text" placeholder="' + (lastP||'Meters') + '" value="' + lastP + '" class="set-primary">' +
+                  '<input type="text" placeholder="' + (lastE||'Tijd (m:s)') + '" value="' + lastE + '" class="set-extra">' +
+                  '<input type="number" placeholder="' + (lastW||'Stand') + '" value="' + lastW + '" class="set-weight">';
+        } else if (ex.volume === 'hyrox_all') {
+          html += '<input type="text" placeholder="' + (lastP||'M/R') + '" value="' + lastP + '" class="set-primary">' +
+                  '<input type="number" placeholder="' + (lastW||'KG') + '" value="' + lastW + '" class="set-weight">' +
+                  '<input type="text" placeholder="' + (lastE||'Extra / Tijd') + '" value="' + lastE + '" class="set-extra">';
+        } else {
+          html += '<input type="text" placeholder="' + (lastP||getVolumeLabel(ex.volume)) + '" value="' + lastP + '" class="set-primary">' +
+                  '<input type="number" placeholder="' + (lastW||(ex.weight==='kg'?'KG':'BW')) + '" value="' + lastW + '" class="set-weight">' +
+                  '<input type="text" placeholder="' + (lastE||'Extra (m / Tijd)') + '" value="' + lastE + '" class="set-extra" style="width:70px;">';
+        }
+        row.innerHTML = html;
+        container.appendChild(row);
+      } catch(e){}
+    }
+
+    function saveExerciseLog() {
+      try {
+        if (!currentSession || !selectedExerciseForWorkout) return;
+        const rows = document.querySelectorAll('#sets-container .set-row');
+
+        rows.forEach(function(row, index) {
+          const pEl = row.querySelector('.set-primary');
+          const wEl = row.querySelector('.set-weight');
+          const eEl = row.querySelector('.set-extra');
+          const primary = pEl ? pEl.value : '';
+          const weight = wEl ? wEl.value : '';
+          const extra = eEl ? eEl.value : '';
+
+          if (primary) {
+            let logEntry = {
+              id: Date.now() + index, workoutId: currentSession.id, date: currentSession.date,
+              startTime: currentSession.startTime, exerciseId: selectedExerciseForWorkout.id,
+              exerciseName: selectedExerciseForWorkout.name, setNum: index + 1,
+              primaryValue: primary, weightValue: weight, extraValue: extra,
+              notes: selectedExerciseForWorkout.notes || ''
+            };
+            logEntry = calculateEnergyForLog(logEntry);
+            logs.push(logEntry);
+          }
+        });
+        localStorage.setItem('gt_logs', JSON.stringify(logs));
+
+        const cardEl = document.getElementById('active-exercise-card');
+        if(cardEl) cardEl.style.display = 'none';
+
+        selectedExerciseForWorkout = null;
+        renderCurrentWorkoutLogs();
+        renderRecentTiles();
+      } catch(e){}
+    }
+
+    function cancelActiveExercise() {
+        const cardEl = document.getElementById('active-exercise-card');
+        if(cardEl) cardEl.style.display = 'none';
+        selectedExerciseForWorkout = null;
+    }
+
+    function deleteSession(workoutId) {
+      if (confirm("Sessie " + workoutId + " verwijderen?")) {
+        logs = logs.filter(function(l) { return l && l.workoutId !== workoutId; });
+        localStorage.setItem('gt_logs', JSON.stringify(logs));
+        renderReports(); uploadDataToCloud(true);
+      }
+    }
+
+    function deleteSingleLog(logId) {
+      logs = logs.filter(function(l) { return l && l.id != logId; });
+      localStorage.setItem('gt_logs', JSON.stringify(logs));
+      renderReports(); uploadDataToCloud(true);
+    }
+
+    function autoSaveLogEdit(logId) {
+      try {
+        let log = logs.find(function(l) { return l && l.id == logId; });
+        if (log) {
+          const pEl = document.getElementById('edit-p-' + logId);
+          const wEl = document.getElementById('edit-w-' + logId);
+          const eEl = document.getElementById('edit-e-' + logId);
+          log.primaryValue = pEl ? pEl.value : '';
+          log.weightValue = wEl ? wEl.value : '';
+          log.extraValue = eEl ? eEl.value : '';
+
+          log = calculateEnergyForLog(log);
+          localStorage.setItem('gt_logs', JSON.stringify(logs));
+          uploadDataToCloud(true);
+
+          const lblW = document.getElementById('lbl-w-' + logId);
+          const lblE = document.getElementById('lbl-e-' + logId);
+          if(lblW) lblW.innerText = log.work_kj.toFixed(1) + ' kJ';
+          if(lblE) lblE.innerText = log.energy_kcal.toFixed(1) + ' kcal';
+        }
+      } catch(e){}
+    }
+
+    function openNewExerciseModal() {
+      try {
+        editingExerciseId = null;
+        const tEl = document.getElementById('modal-title');
+        const nEl = document.getElementById('new-ex-name');
+        const fEl = document.getElementById('new-ex-formula');
+        const noEl = document.getElementById('new-ex-notes');
+        const mEl = document.getElementById('new-ex-modal');
+
+        if(tEl) tEl.innerText = "Nieuwe Oefening Toevoegen";
+        if(nEl) nEl.value = '';
+        if(fEl) fEl.value = '';
+        if(noEl) noEl.value = '';
+        if(mEl) mEl.style.display = 'flex';
+      } catch(e){}
+    }
+
+    function editExercise(id) {
+      try {
+        editingExerciseId = id;
+        const ex = exercises.find(function(e) { return e && e.id === id; });
+        if(!ex) return;
+
+        const tEl = document.getElementById('modal-title');
+        const nEl = document.getElementById('new-ex-name');
+        const cEl = document.getElementById('new-ex-cat');
+        const iEl = document.getElementById('new-ex-icon');
+        const vEl = document.getElementById('new-ex-volume');
+        const fEl = document.getElementById('new-ex-formula');
+        const noEl = document.getElementById('new-ex-notes');
+        const mEl = document.getElementById('new-ex-modal');
+
+        if(tEl) tEl.innerText = "Oefening Bewerken";
+        if(nEl) nEl.value = ex.name || '';
+        if(cEl) cEl.value = ex.category || 'overig';
+        if(iEl) iEl.value = ex.icon || '🏋️';
+        if(vEl) vEl.value = ex.volume || '';
+        if(fEl) fEl.value = ex.formula || '';
+        if(noEl) noEl.value = ex.notes || '';
+        if(mEl) mEl.style.display = 'flex';
+      } catch(e){}
+    }
+
+    function closeNewExerciseModal() {
+        const mEl = document.getElementById('new-ex-modal');
+        if(mEl) mEl.style.display = 'none';
+        editingExerciseId = null;
+    }
+
+    function saveNewExercise() {
+      try {
+        const nEl = document.getElementById('new-ex-name');
+        const name = nEl ? nEl.value : '';
+        if (!name) return alert('Vul een naam in.');
+
+        const cEl = document.getElementById('new-ex-cat');
+        const vEl = document.getElementById('new-ex-volume');
+        const noEl = document.getElementById('new-ex-notes');
+        const iEl = document.getElementById('new-ex-icon');
+        const fEl = document.getElementById('new-ex-formula');
+
+        const catVal = cEl ? cEl.value : 'overig';
+
+        const exData = {
+          id: editingExerciseId ? editingExerciseId : 'custom-' + Date.now(),
+          name: name,
+          category: catVal,
+          volume: vEl ? vEl.value : '',
+          weight: 'kg',
+          isHyrox: catVal === 'hyrox',
+          isStation: false,
+          notes: noEl ? noEl.value : '',
+          icon: iEl ? iEl.value : '🏋️',
+          formula: fEl ? fEl.value : ''
+        };
+
+        if (editingExerciseId) {
+           const idx = exercises.findIndex(function(e) { return e && e.id === editingExerciseId; });
+           if(idx !== -1) exercises[idx] = exData;
+        } else {
+           exercises.push(exData);
+        }
+
+        localStorage.setItem('gt_exercises', JSON.stringify(exercises));
+        renderExerciseList(); populateReportExerciseSelect(); renderRecentTiles();
+        closeNewExerciseModal();
+        uploadDataToCloud(true);
+      } catch(e){}
+    }
+
+    function setCatFilter(cat) {
+      activeCatFilter = cat;
+      document.querySelectorAll('#tab-exercises .filter-btn').forEach(function(b) { b.classList.remove('active'); });
+      const actEl = document.getElementById('cat-' + cat);
+      if(actEl) actEl.classList.add('active');
+      renderExerciseList();
+    }
+
+    function renderExerciseList() {
+      try {
+        const container = document.getElementById('exercise-list');
+        const sEl = document.getElementById('lib-search');
+        if(!container) return;
+
+        const query = sEl ? sEl.value.toLowerCase() : '';
+        container.innerHTML = '';
+
+        let filtered = exercises.filter(function(e) {
+            return e && e.name && e.name.toLowerCase().includes(query);
+        });
+        if (activeCatFilter !== 'all') {
+           filtered = filtered.filter(function(e) { return e && (e.category || 'overig') === activeCatFilter; });
+        }
+
+        filtered.forEach(function(ex) {
+          if(!ex) return;
+          const card = document.createElement('div'); card.className = 'card'; card.style.padding = '10px 15px'; card.style.marginBottom = '8px';
+          card.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+              '<div>' +
+                '<strong>' + (ex.icon||'🏋️') + ' ' + (ex.name||'') + '</strong> ' + ((ex.category === 'hyrox' || ex.isHyrox) ? '<span class="badge badge-hyrox">HYROX</span>' : '') +
+                '<div style="font-size:0.75rem; color:var(--text-dim); margin-top:2px;">' +
+                  getVolumeLabel(ex.volume) + ' | Formule: ' + (ex.formula||'-') +
+                '</div>' +
+              '</div>' +
+              '<button class="btn-icon" style="color:var(--primary); font-size:0.9rem;" onclick="editExercise(\'' + ex.id + '\')">✏️ Bewerk</button>' +
+            '</div>';
+          container.appendChild(card);
+        });
+      } catch(e){}
+    }
+
+    function populateReportExerciseSelect() {
+      try {
+        const select = document.getElementById('report-exercise-select');
+        if(!select) return;
+        select.innerHTML = '';
+        exercises.forEach(function(ex) {
+          if(!ex || !ex.id) return;
+          const opt = document.createElement('option'); opt.value = ex.id; opt.innerText = ex.name||''; select.appendChild(opt);
+        });
+      } catch(e){}
+    }
+
+    function toggleReportFilter() {
+      const tEl = document.getElementById('report-filter-type');
+      if(!tEl) return;
+      const type = tEl.value;
+
+      const gEl = document.getElementById('report-exercise-select-group');
+      if(gEl) gEl.style.display = type === 'exercise' ? 'block' : 'none';
+
+      setDateFilter(type === 'session' ? '1m' : '3m');
+    }
+
+    function setDateFilter(filter) {
+      selectedDateFilter = filter;
+      document.querySelectorAll('#date-filter-container .filter-btn').forEach(function(b) { b.classList.remove('active'); });
+      const fEl = document.getElementById('btn-' + filter);
+      if(fEl) fEl.classList.add('active');
+      renderReports();
+    }
+
+    function toggleAccordion(id) {
+        const el = document.getElementById(id);
+        if(el) el.classList.toggle('open');
+    }
+
+    function renderReports() {
+      try {
+        const tEl = document.getElementById('report-filter-type');
+        const container = document.getElementById('report-results');
+        if(!container || !tEl) return;
+        const type = tEl.value;
+        container.innerHTML = '';
+
+        if (logs.length === 0) {
+            container.innerHTML = '<div style="text-align:center; padding:20px;">Geen workouts gevonden.</div>';
+            return;
+        }
+
+        let cutOff = new Date();
+        if (selectedDateFilter === '1m') cutOff.setMonth(cutOff.getMonth() - 1);
+        else if (selectedDateFilter === '3m') cutOff.setMonth(cutOff.getMonth() - 3);
+        else if (selectedDateFilter === '6m') cutOff.setMonth(cutOff.getMonth() - 6);
+        else if (selectedDateFilter === '1y') cutOff.setFullYear(cutOff.getFullYear() - 1);
+        else cutOff = new Date(0);
+
+        const fLogs = logs.filter(function(l) { return l && l.date && new Date(l.date) >= cutOff; });
+        if (fLogs.length === 0) {
+            container.innerHTML = '<div style="text-align:center; color:var(--text-dim); padding:20px;">Geen data gevonden in deze periode.</div>';
+            return;
+        }
+
+        let total_period_kj = 0, total_period_kcal = 0;
+        fLogs.forEach(function(l) { total_period_kj += (l.work_kj||0); total_period_kcal += (l.energy_kcal||0); });
+
+        const summaryCard = document.createElement('div'); summaryCard.className = 'card'; summaryCard.style.borderLeft = '4px solid var(--energy)'; summaryCard.style.padding = '12px 15px';
+        summaryCard.innerHTML = '<div style="font-size:0.8rem; color:var(--text-dim); text-transform:uppercase;">Totale Arbeid & Energie (' + selectedDateFilter.toUpperCase() + ')</div>' +
+          '<div style="font-size:1.2rem; font-weight:bold; color:var(--energy); margin-top:2px;">⚡ ' + total_period_kj.toFixed(0) + ' kJ <span style="font-size:0.9rem; font-weight:normal; color:var(--text);">(' + total_period_kcal.toFixed(0) + ' kcal)</span></div>';
+        container.appendChild(summaryCard);
+
+        if (type === 'session') {
+          const grouped = {};
+          fLogs.forEach(function(l) { if(l && l.workoutId) { if(!grouped[l.workoutId]) grouped[l.workoutId] = []; grouped[l.workoutId].push(l); } });
+
+          Object.keys(grouped).reverse().forEach(function(wId) {
+            const sLogs = grouped[wId];
+            if(!sLogs || sLogs.length===0) return;
+            let sess_kj = 0, sess_kcal = 0;
+            sLogs.forEach(function(l) { sess_kj += (l.work_kj||0); sess_kcal += (l.energy_kcal||0); });
+
+            const header = document.createElement('div'); header.className = 'accordion-header'; header.onclick = function() { toggleAccordion('acc-' + wId); };
+            header.innerHTML = '<div style="width:100%;"><div style="display:flex; justify-content:space-between;"><span>Sessie ' + wId + '</span> <span>▼</span></div>' +
+              '<div style="font-size:0.75rem; color:var(--text-dim); font-weight:normal; margin-top:2px;">' + (sLogs[0].date||'') + ' | ' + sLogs.length + ' sets <span class="badge badge-energy" style="float:right;">' + sess_kj.toFixed(0) + ' kJ | ' + sess_kcal.toFixed(0) + ' kcal</span></div></div>';
+            const content = document.createElement('div'); content.className = 'accordion-content'; content.id = 'acc-' + wId;
+            let html = '';
+            sLogs.forEach(function(l) {
+              html += '<div style="font-size:0.85rem; margin-bottom:8px; border-bottom: 1px solid #2a2a2a; padding-bottom: 6px;">' +
+                '<div style="display:flex; justify-content:space-between;"><strong>' + (l.exerciseName||'Onbekend') + '</strong> <span style="font-size:0.7rem; color:var(--energy);"><span id="lbl-w-' + l.id + '">' + (l.work_kj||0).toFixed(1) + ' kJ</span> / <span id="lbl-e-' + l.id + '">' + (l.energy_kcal||0).toFixed(1) + ' kcal</span></span></div>' +
+                '<div style="display:flex; gap:6px; margin-top:4px; align-items:center;">' +
+                  '<input type="text" id="edit-p-' + l.id + '" value="' + (l.primaryValue||'') + '" class="edit-input" placeholder="R/M" onchange="autoSaveLogEdit(' + l.id + ')">' +
+                  '<input type="text" id="edit-w-' + l.id + '" value="' + (l.weightValue||'') + '" class="edit-input" placeholder="KG" onchange="autoSaveLogEdit(' + l.id + ')">' +
+                  '<input type="text" id="edit-e-' + l.id + '" value="' + (l.extraValue||'') + '" class="edit-input" placeholder="E / Tijd" onchange="autoSaveLogEdit(' + l.id + ')">' +
+                  '<button class="btn-icon" onclick="deleteSingleLog(' + l.id + ')">🗑️</button>' +
+                '</div></div>';
+            });
+            html += '<button class="btn btn-danger" style="margin-top:10px; padding:6px; font-size:0.8rem;" onclick="deleteSession(\'' + wId + '\')">Sessie Wissen</button>';
+            content.innerHTML = html; container.appendChild(header); container.appendChild(content);
+          });
+        }
+        else if (type === 'exercise') {
+          const sEl = document.getElementById('report-exercise-select');
+          const exId = sEl ? sEl.value : '';
+          const currentEx = exercises.find(function(e) { return e && e.id === exId; });
+          const eLogs = fLogs.filter(function(l) { return l && l.exerciseId === exId; }).reverse();
+
+          let ex_kj = 0, ex_kcal = 0; eLogs.forEach(function(l) { ex_kj += (l.work_kj||0); ex_kcal += (l.energy_kcal||0); });
+          const card = document.createElement('div'); card.className = 'card';
+          let reportHtml = '<h3>' + (currentEx ? (currentEx.icon||'🏋️') + ' ' + (currentEx.name||'') : 'Onbekend') + '</h3>' +
+            '<p style="font-size:0.8rem; color:var(--text-dim); margin-bottom:10px;">Totaal voor deze oefening: <strong style="color:var(--energy);">' + ex_kj.toFixed(0) + ' kJ / ' + ex_kcal.toFixed(0) + ' kcal</strong></p>';
+
+          if(eLogs.length>0) {
+              reportHtml += '<table class="report-table"><thead><tr><th>Set</th><th>Reps/M</th><th>KG/St</th><th>Arbeid/Energie</th></tr></thead><tbody>';
+              eLogs.forEach(function(l) {
+                  reportHtml += '<tr><td>' + (l.date||'').substring(5) + '<br>#' + (l.setNum||0) + '</td><td>' + (l.primaryValue||'-') + '</td><td>' + (l.weightValue||'BW') + '</td><td style="color:var(--energy); font-weight:bold;">' + (l.work_kj||0).toFixed(0) + ' kJ<br>' + (l.energy_kcal||0).toFixed(0) + ' kcal</td></tr>';
+              });
+              reportHtml += '</tbody></table>';
+          } else {
+              reportHtml += '<div style="color:var(--text-dim);font-size:0.85rem;">Geen data in deze periode.</div>';
+          }
+          card.innerHTML = reportHtml;
+          container.appendChild(card);
+        }
+        else if (type === 'hyrox') {
+          const hyroxStations = exercises.filter(function(e) { return e && (e.category === 'hyrox' || e.isHyrox); });
+
+          hyroxStations.forEach(function(st) {
+            let stLogs = fLogs.filter(function(l) { return l && l.exerciseId === st.id; }).reverse();
+            let st_kj = 0, st_kcal = 0;
+            stLogs.forEach(function(l) { st_kj += (l.work_kj||0); st_kcal += (l.energy_kcal||0); });
+
+            const header = document.createElement('div'); header.className = 'accordion-header'; header.onclick = function() { toggleAccordion('acc-hyrox-' + st.id); };
+            header.innerHTML = '<div style="width:100%;"><div style="display:flex; justify-content:space-between;"><span>' + (st.icon || '') + ' ' + (st.name||'') + '</span> <span>▼</span></div>' +
+              '<div style="font-size:0.75rem; color:var(--text-dim); font-weight:normal; margin-top:2px;">' + (st.target || '') + ' | ' + stLogs.length + ' resultaten <span class="badge badge-energy" style="float:right;">' + st_kj.toFixed(0) + ' kJ | ' + st_kcal.toFixed(0) + ' kcal</span></div></div>';
+
+            const content = document.createElement('div'); content.className = 'accordion-content'; content.id = 'acc-hyrox-' + st.id;
+
+            if (stLogs.length > 0) {
+              let html = '<table class="report-table"><thead><tr><th>Datum</th><th>Afstand/Reps</th><th>KG/Stand</th><th>Tijd/Extra</th><th>Arbeid</th></tr></thead><tbody>';
+              stLogs.forEach(function(l) {
+                html += '<tr><td>' + (l.date||'').substring(5) + '</td><td>' + (l.primaryValue || '-') + '</td><td>' + (l.weightValue ? l.weightValue + (st.volume === 'hyrox_erg' ? ' (st)' : ' kg') : 'BW') + '</td><td><strong>' + (l.extraValue || '-') + '</strong></td><td style="color:var(--energy); font-weight:bold;">' + (l.work_kj||0).toFixed(0) + ' kJ</td></tr>';
+              });
+              html += '</tbody></table>';
+              content.innerHTML = html;
+            } else {
+              content.innerHTML = '<div style="color:var(--text-dim); font-size:0.85rem;">Geen resultaten gevonden in deze periode.</div>';
+            }
+
+            container.appendChild(header); container.appendChild(content);
+          });
+        }
+      } catch(err) {
+        console.error(err);
+      }
+    }
+
+    function saveGoogleUrl() {
+        const uEl = document.getElementById('google-script-url');
+        if(uEl) {
+           const cleanUrl = sanitizeGoogleUrl(uEl.value);
+           uEl.value = cleanUrl;
+           localStorage.setItem('gt_google_url', cleanUrl);
+        }
+        updateSyncBadge('URL Opgeslagen');
+        downloadDataFromCloud(false);
+    }
+
+    async function fetchWithTimeout(url, options) {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(function() { controller.abort(); }, 12000);
+      try {
+        return await fetch(url, Object.assign({}, options, { signal: controller.signal }));
+      } finally {
+        clearTimeout(timeoutId);
+      }
+    }
+
+    async function uploadDataToCloud(silent = true) {
+      const rawUrl = localStorage.getItem('gt_google_url') || DEFAULT_GOOGLE_URL;
+      if (!rawUrl) { updateSyncBadge('⚪ Alleen lokaal'); return; }
+
+      const url = sanitizeGoogleUrl(rawUrl);
+      if (!silent) updateSyncBadge('🟡 Syncing...');
+      const payload = JSON.stringify({ type: 'SYNC_ALL', logs: logs, exercises: exercises, profiles: profiles });
+      let lastError;
+
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const res = await fetchWithTimeout(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: payload,
+            redirect: 'follow'
+          });
+
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+
+          const text = await res.text();
+          let result;
+          try {
+             result = JSON.parse(text);
+          } catch(e) {
+             console.error("Fout met payload text:", text);
+             throw new Error("Ongeldige JSON (meestal permissie of login redirect).");
+          }
+
+          if (result.status !== 'success') {
+            throw new Error(result.message || 'Apps Script fout.');
+          }
+
+          updateSyncBadge('🟢 Synchroon');
+          return;
+        } catch (err) {
+          lastError = err;
+          if (attempt === 0) {
+            updateSyncBadge('🟡 Sync mislukt; nieuwe poging...');
+            await new Promise(function(resolve) { setTimeout(resolve, 1000); });
+          }
+        }
+      }
+      console.error('Cloud upload failed:', lastError);
+      updateSyncBadge('🔴 Sync mislukt (lokaal beschikbaar)');
+      if (!silent) alert('Sync mislukt: ' + lastError.message + '\n\nControleer of je web app is gepubliceerd als "Iedereen" (Anyone).');
+    }
+
+    async function downloadDataFromCloud(silent = false) {
+      const rawUrl = localStorage.getItem('gt_google_url') || DEFAULT_GOOGLE_URL;
+      if (!rawUrl) { updateSyncBadge('⚪ Alleen lokaal'); return; }
+
+      const url = sanitizeGoogleUrl(rawUrl);
+      if (!silent) updateSyncBadge('🟡 Ophalen...');
+
+      let lastError;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const res = await fetchWithTimeout(url, { method: 'GET', redirect: 'follow' });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+
+          const text = await res.text();
+          let data;
+          try {
+             data = JSON.parse(text);
+          } catch(e) {
+             console.error("Download payload fout:", text);
+             throw new Error("Geen geldige data ontvangen (controleer publicatie).");
+          }
+
+          if (data.logs) logs = mergeData(logs, data.logs);
+          if (data.exercises && data.exercises.length > 0) exercises = data.exercises;
+          if (data.profiles) profiles = mergeData(profiles, data.profiles);
+
+          localStorage.setItem('gt_logs', JSON.stringify(logs));
+          localStorage.setItem('gt_exercises', JSON.stringify(exercises));
+          localStorage.setItem('gt_profiles', JSON.stringify(profiles));
+
+          populateProfileUI(); renderExerciseList(); populateReportExerciseSelect(); renderReports(); renderRecentTiles();
+          updateSyncBadge('🟢 Synchroon');
+          return;
+        } catch (err) {
+          lastError = err;
+          if (attempt === 0) {
+            await new Promise(function(resolve) { setTimeout(resolve, 1000); });
+          }
+        }
+      }
+      console.error('Cloud download failed:', lastError);
+      updateSyncBadge('🔴 Sync mislukt (lokaal beschikbaar)');
+    }
+
+    function clearAllData() { if (confirm('Alle lokale data wissen?')) { localStorage.clear(); location.reload(); } }
+  </script>
+</body>
+</html>
