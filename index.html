@@ -10,14 +10,23 @@
       --text: #ffffff; --text-dim: #a0a0a0; --border: #333333; --success: #2ed573; --energy: #f39c12;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
-    body { background-color: var(--bg); color: var(--text); padding-bottom: 90px; min-height: 100vh; }
+    body { background-color: var(--bg); color: var(--text); padding-bottom: 100px; min-height: 100vh; }
     header { background-color: var(--card-bg); padding: 12px 15px; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; display: flex; justify-content: space-between; align-items: center; }
-    h1 { font-size: 1.1rem; color: var(--primary); }
+    h1 { font-size: 1.1rem; color: var(--primary); display: flex; align-items: baseline; gap: 6px; }
+    .app-version { font-size: 0.7rem; color: var(--text-dim); font-weight: normal; }
     .header-badges { display: flex; gap: 6px; align-items: center; }
     .container { padding: 15px; max-width: 600px; margin: 0 auto; }
     
-    .nav-bar { position: fixed; bottom: 0; left: 0; right: 0; background-color: var(--card-bg); border-top: 1px solid var(--border); display: flex; justify-content: space-around; padding: 10px 0; z-index: 9999; }
-    @supports (padding-bottom: env(safe-area-inset-bottom)) { .nav-bar { padding-bottom: calc(10px + env(safe-area-inset-bottom)); } }
+    /* VASTEZITTENDE ONDERSTE MENU-BALK (KOGELVRIJE FALLBACK VOOR IOS) */
+    .nav-bar { 
+      position: fixed; bottom: 0; left: 0; right: 0; 
+      background-color: var(--card-bg); border-top: 1px solid var(--border); 
+      display: flex; justify-content: space-around; 
+      padding-top: 12px; 
+      padding-bottom: 12px; /* Fallback voor als safe-area stuk gaat */
+      padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); 
+      z-index: 99999; 
+    }
     .nav-btn { background: none; border: none; color: var(--text-dim); font-size: 0.8rem; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; width: 25%; }
     .nav-btn.active { color: var(--primary); font-weight: bold; }
     .nav-btn svg { width: 22px; height: 22px; fill: currentColor; }
@@ -73,15 +82,14 @@
 <body>
 
   <header>
-    <h1>Gym Tracker</h1>
+    <h1>Gym Tracker <span class="app-version">v1.2</span></h1>
     <div class="header-badges">
-      <span id="sync-status-badge" class="badge badge-sync">🟢 Klaar</span>
+      <span id="sync-status-badge" class="badge badge-sync">🟡 Laden...</span>
       <span id="active-session-badge" class="badge" style="display:none; background: var(--success); color: black;">Workout Actief</span>
     </div>
   </header>
 
   <div class="container">
-    
     <!-- TAB 1: WORKOUT -->
     <div id="tab-workout" class="tab-content active">
       <div id="no-session-view">
@@ -92,7 +100,6 @@
       </div>
 
       <div id="active-session-view" style="display: none;">
-        
         <div class="card">
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <div>
@@ -118,7 +125,6 @@
             <input type="text" id="exercise-search" placeholder="Typ om te zoeken..." oninput="filterExercises()" onfocus="filterExercises()">
             <div id="search-suggestions" class="suggestions" style="display:none;"></div>
           </div>
-          
           <h3 style="margin-top:20px;">Snel Kiezen (Laatst Gedaan)</h3>
           <div id="recent-tiles-container" class="tiles-grid" style="margin-top:10px;"></div>
         </div>
@@ -175,12 +181,10 @@
             <option value="hyrox">HYROX</option>
           </select>
         </div>
-
         <div class="form-group" id="report-exercise-select-group" style="display:none;">
           <label>Kies Oefening:</label>
           <select id="report-exercise-select" onchange="renderReports()"></select>
         </div>
-
         <div id="date-filter-container">
           <label>Periode Filter:</label>
           <div class="filter-btn-group" id="filter-btn-container">
@@ -192,13 +196,11 @@
           </div>
         </div>
       </div>
-
       <div id="report-results"></div>
     </div>
 
     <!-- TAB 4: INSTELLINGEN -->
     <div id="tab-settings" class="tab-content">
-      
       <div class="card">
         <h3>Lichaamsmetingen & Rendement</h3>
         <p style="font-size:0.8rem; color:var(--text-dim); margin-bottom:10px;">Wordt gebruikt om de geleverde mechanische arbeid (kJ) en het energieverbruik (kcal) per set uit te rekenen.</p>
@@ -218,10 +220,12 @@
           <input type="url" id="google-script-url" placeholder="https://script.google.com/macros/s/.../exec">
         </div>
         <button class="btn" onclick="saveGoogleUrl()">Koppeling Opslaan</button>
+        <div id="sync-status-details" style="font-size:0.85rem; margin-top:10px; text-align:center;"></div>
       </div>
 
       <div class="card">
         <h3>Cloud Synchronisatie</h3>
+        <p style="font-size:0.8rem; color:var(--text-dim);">Auto-sync is onzichtbaar gemaakt tijdens workouts. Synchroniseer hier geforceerd indien nodig.</p>
         <button class="btn btn-secondary" onclick="uploadDataToCloud(false)">Forceer Upload (Push)</button>
         <button class="btn btn-secondary" style="margin-top:8px;" onclick="downloadDataFromCloud(false)">Haal Data uit Cloud (Pull & Merge)</button>
       </div>
@@ -231,7 +235,26 @@
         <button class="btn btn-danger" onclick="clearAllData()">Alle Lokale Data Wissen</button>
       </div>
     </div>
+  </div>
 
+  <!-- NAVBAR -->
+  <div class="nav-bar">
+    <button class="nav-btn active" onclick="switchTab('workout')">
+      <svg viewBox="0 0 24 24"><path d="M20.57 14.86L22 13.43 20.57 12 17 15.57 8.43 7 12 3.43 10.57 2 9.14 3.43 7.71 2 6.29 3.43 4.86 2 3.43 3.43 2 4.86 3.43 6.29 2 7.71 3.43 9.14 2 10.57 3.43 12 7 20.57 15.57 17 12 20.57 13.43 22 14.86 20.57z"/></svg>
+      <span>Workout</span>
+    </button>
+    <button class="nav-btn" onclick="switchTab('exercises')">
+      <svg viewBox="0 0 24 24"><path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/></svg>
+      <span>Oefeningen</span>
+    </button>
+    <button class="nav-btn" onclick="switchTab('reports')">
+      <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V5h14v14zM7 10h2v7H7zm4-3h2v10h-2zm4 6h2v4h-2z"/></svg>
+      <span>Rapport</span>
+    </button>
+    <button class="nav-btn" onclick="switchTab('settings')">
+      <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6-3.6z"/></svg>
+      <span>Instellingen</span>
+    </button>
   </div>
 
   <!-- MODAL VOOR OEFENING BEWERKEN / NIEUW -->
@@ -295,10 +318,8 @@
       { id: 'p1', date: '2024-01-01', height: 1.97, weight: 87.0, efficiency: 0.23 }
     ];
 
-    // DE GROTE OEFENINGEN BIBLIOTHEEK (80+ NIEUWE)
-    // isMeters detecteert automatisch of de gebruiker 'm' heeft ingevuld.
+    // DE COMPLETE OEFENINGEN BIBLIOTHEEK (Voor Auto-Repair)
     const DEFAULT_EXERCISES = [
-      // HYROX
       { id: 'h1', category: 'hyrox', name: 'Hardlopen (Hyrox)', volume: 'hyrox_all', weight: 'bw', isHyrox: true, isStation: false, target: '1000m', notes: '', icon: '🏃', formula: 'P * BW * 0.001' },
       { id: 'h2', category: 'hyrox', name: 'SkiErg (Hyrox)', volume: 'hyrox_erg', weight: 'bw', isHyrox: true, isStation: true, target: '1000m', notes: '', icon: '🎿', formula: 'P * 0.090' },
       { id: 'h3', category: 'hyrox', name: 'Sled Push (Hyrox)', volume: 'hyrox_all', weight: 'kg', isHyrox: true, isStation: true, target: '50m @ 152 kg', notes: '', icon: '🛷', formula: '(isMeters ? P : P*1) * (K + 20) * 0.00392' },
@@ -309,7 +330,6 @@
       { id: 'h8', category: 'hyrox', name: 'Sandbag Lunges', volume: 'hyrox_all', weight: 'kg', isHyrox: true, isStation: true, target: '100m @ 20 kg', notes: '', icon: '🎒', formula: '(isMeters ? P : P*1) * (K + BW * 0.8) * 0.00638' },
       { id: 'h9', category: 'hyrox', name: 'Wall Balls', volume: 'hyrox_all', weight: 'kg', isHyrox: true, isStation: true, target: '100 reps @ 6 kg', notes: '', icon: '🎯', formula: 'P * (0.444 + K * 0.00932)' },
       
-      // FUNCTIONEEL / CROSSFIT (20x)
       { id: 'cf1', category: 'functional', name: 'Box Jumps', volume: 'reps', weight: 'bw', isHyrox: false, isStation: false, icon: '🤸', formula: 'P * BW * (E || 0.6) * 0.00981' },
       { id: 'cf2', category: 'functional', name: 'Muscle Up (Bar/Ring)', volume: 'reps', weight: 'bw', isHyrox: false, isStation: false, icon: '🤸', formula: 'P * BW * 0.012' },
       { id: 'cf3', category: 'functional', name: 'Pull Up (Kipping/Butterfly)', volume: 'reps', weight: 'bw', isHyrox: false, isStation: false, icon: '💪', formula: 'P * BW * 0.005' },
@@ -331,7 +351,6 @@
       { id: 'cf19', category: 'functional', name: 'Assault Bike / Echo Bike', volume: 'hyrox_erg', weight: 'bw', isHyrox: false, isStation: false, icon: '🚴', formula: 'P * 0.05' },
       { id: 'cf20', category: 'functional', name: 'Air Runner / Treadmill', volume: 'meters', weight: 'bw', isHyrox: false, isStation: false, icon: '🏃', formula: 'P * BW * 0.0012' },
 
-      // VRIJE GEWICHTEN / BARBELL / DB (40x)
       { id: 'fw1', category: 'freeweight', name: 'Barbell Back Squat', volume: 'reps', weight: 'kg', icon: '🦵', formula: 'P * (BW*0.8 + K) * (H*0.4) * 0.00981' },
       { id: 'fw2', category: 'freeweight', name: 'Barbell Front Squat', volume: 'reps', weight: 'kg', icon: '🦵', formula: 'P * (BW*0.8 + K) * (H*0.4) * 0.00981' },
       { id: 'fw3', category: 'freeweight', name: 'Barbell Deadlift', volume: 'reps', weight: 'kg', icon: '🏋️', formula: 'P * K * (H*0.4) * 0.00981' },
@@ -373,7 +392,6 @@
       { id: 'fw39', category: 'freeweight', name: 'Kettlebell Windmill', volume: 'reps', weight: 'kg', icon: '🤸', formula: 'P * K * 1.0 * 0.00981' },
       { id: 'fw40', category: 'freeweight', name: 'Triceps Dip (Weighted)', volume: 'reps', weight: 'kg', icon: '💪', formula: 'P * (BW + K) * 0.5 * 0.00981' },
 
-      // APPARATEN / TECHNOGYM (20x)
       { id: 'm1', category: 'machine', name: 'Leg Press (Machine)', volume: 'reps', weight: 'kg', icon: '🦵', formula: 'P * K * 0.5 * 0.00981' },
       { id: 'm2', category: 'machine', name: 'Hack Squat (Machine)', volume: 'reps', weight: 'kg', icon: '🦵', formula: 'P * K * 0.6 * 0.00981' },
       { id: 'm3', category: 'machine', name: 'Leg Extension', volume: 'reps', weight: 'kg', icon: '🦵', formula: 'P * K * 0.35 * 0.00981' },
@@ -400,7 +418,7 @@
     let logs = [];
     let profiles = [];
     let currentSession = null;
-    let editingExerciseId = null; // NIEUW: Houdt bij of we een bestaande oefening bewerken
+    let editingExerciseId = null;
     let activeCatFilter = 'all';
 
     let timerInterval = null;
@@ -408,22 +426,28 @@
     let selectedDateFilter = '1m';
 
     window.onload = function() {
-      try { exercises = JSON.parse(localStorage.getItem('gt_exercises')) || DEFAULT_EXERCISES; } catch(e) { exercises = DEFAULT_EXERCISES; }
+      try { exercises = JSON.parse(localStorage.getItem('gt_exercises')) || []; } catch(e) { exercises = []; }
       try { logs = JSON.parse(localStorage.getItem('gt_logs')) || []; } catch(e) { logs = []; }
       try { profiles = JSON.parse(localStorage.getItem('gt_profiles')) || DEFAULT_PROFILES; } catch(e) { profiles = DEFAULT_PROFILES; }
       try { currentSession = JSON.parse(localStorage.getItem('gt_current_session')) || null; } catch(e) { currentSession = null; }
 
-      // Update bestaande oefeningen als er missende ID's in LocalStorage zitten (zodat nieuwe 80 oefeningen meekomen)
-      const exIds = exercises.map(e => e.id);
-      DEFAULT_EXERCISES.forEach(defEx => {
-         if (!exIds.includes(defEx.id)) exercises.push(defEx);
-      });
-      localStorage.setItem('gt_exercises', JSON.stringify(exercises));
-
-      if(!localStorage.getItem('gt_profiles')) localStorage.setItem('gt_profiles', JSON.stringify(DEFAULT_PROFILES));
-      
       const urlInput = document.getElementById('google-script-url');
       if (urlInput) urlInput.value = localStorage.getItem('gt_google_url') || DEFAULT_GOOGLE_URL;
+
+      // AUTO-REPAIR: Mis je de 80 oefeningen? Injecteer ze dan direct lokaal!
+      let needSync = false;
+      const existingIds = exercises.map(e => e.id);
+      DEFAULT_EXERCISES.forEach(defEx => {
+         if (!existingIds.includes(defEx.id)) {
+            exercises.push(defEx);
+            needSync = true;
+         }
+      });
+      if (needSync || !localStorage.getItem('gt_exercises')) {
+         localStorage.setItem('gt_exercises', JSON.stringify(exercises));
+      }
+
+      if(!localStorage.getItem('gt_profiles')) localStorage.setItem('gt_profiles', JSON.stringify(DEFAULT_PROFILES));
 
       populateProfileUI();
       checkActiveSession();
@@ -431,6 +455,11 @@
       populateReportExerciseSelect();
       renderRecentTiles();
       downloadDataFromCloud(true);
+
+      // Als de auto-repair zojuist getriggerd is, push hem dan stiekem door naar Google Sheets!
+      if (needSync) {
+         setTimeout(() => { uploadDataToCloud(true); }, 2000);
+      }
     };
 
     function autoSuggestFormula() {
@@ -486,7 +515,6 @@
       return active || DEFAULT_PROFILES[0];
     }
 
-    // NIEUW: SLIMME PARSER VOOR isMeters
     function calculateEnergyForLog(log) {
       const prof = getProfileForDate(log.date);
       const ex = exercises.find(e => e.id === log.exerciseId);
@@ -806,7 +834,6 @@
       }
     }
 
-    // --- OEFENING BEWERKEN / NIEUW ---
     function openNewExerciseModal() { 
       editingExerciseId = null;
       document.getElementById('modal-title').innerText = "Nieuwe Oefening Toevoegen";
@@ -841,7 +868,7 @@
         name: name,
         category: document.getElementById('new-ex-cat').value,
         volume: document.getElementById('new-ex-volume').value,
-        weight: 'kg', // Standaard gewicht
+        weight: 'kg',
         isHyrox: document.getElementById('new-ex-cat').value === 'hyrox',
         isStation: false,
         notes: document.getElementById('new-ex-notes').value,
@@ -1004,12 +1031,17 @@
         if (!res.ok) throw new Error('HTTP Fout');
         const data = await res.json();
         if (data.logs) logs = mergeData(logs, data.logs);
-        if (data.exercises) {
-            // Overschrijf DEFAULT_EXERCISES met sheet-data indien deze id bestaat
-            const mergedEx = mergeData(exercises, data.exercises);
-            exercises = mergedEx;
+        
+        if (data.exercises && data.exercises.length > 0) {
+            // MERGE in plaats van botweg overschrijven:
+            const map = new Map();
+            exercises.forEach(e => map.set(String(e.id), e)); // Lokale basis
+            data.exercises.forEach(e => map.set(String(e.id), e)); // Cloud overschrijft
+            exercises = Array.from(map.values());
         }
+        
         if (data.profiles) profiles = mergeData(profiles, data.profiles);
+        
         localStorage.setItem('gt_logs', JSON.stringify(logs));
         localStorage.setItem('gt_exercises', JSON.stringify(exercises));
         localStorage.setItem('gt_profiles', JSON.stringify(profiles));
