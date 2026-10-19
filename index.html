@@ -429,7 +429,7 @@
         
         if(!w || !h || !e) return alert("Vul alle profielvelden in.");
         
-        const newProf = { id: 'p-'+Date.now(), date: new Date().toISOString().split('T')[0], height: h, weight: w, efficiency: e };
+        const newProf = { id: 'p-'+Date.now(), date: getLocalDateString(new Date()), height: h, weight: w, efficiency: e };
         profiles.push(newProf);
         profiles.sort(function(a,b) { return new Date(a.date) - new Date(b.date); });
         localStorage.setItem('gt_profiles', JSON.stringify(profiles));
@@ -519,21 +519,30 @@
       } catch(e){}
     }
 
-    function startNewSession() {
-      try {
-        const now = new Date();
-        currentSession = { 
-            id: 'W-' + Date.now().toString().slice(-6), 
-            date: now.toISOString().split('T')[0], 
-            startTime: now.toTimeString().split(' ')[0].substring(0, 5), 
-            startTimestamp: now.getTime(), 
-            endTime: null 
-        };
-        localStorage.setItem('gt_current_session', JSON.stringify(currentSession));
-        selectedExerciseForWorkout = null;
-        checkActiveSession();
-      } catch(e){}
-    }
+  // NIEUWE CODE (houdt de datum vast in lokale tijd):
+function getLocalDateString(d) {
+  const dateObj = d || new Date();
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function startNewSession() {
+  try {
+    const now = new Date();
+    currentSession = { 
+        id: 'W-' + Date.now().toString().slice(-6), 
+        date: getLocalDateString(now), // <-- Gebruikt nu altijd je lokale datum
+        startTime: now.toTimeString().split(' ')[0].substring(0, 5), 
+        startTimestamp: now.getTime(), 
+        endTime: null 
+    };
+    localStorage.setItem('gt_current_session', JSON.stringify(currentSession));
+    selectedExerciseForWorkout = null;
+    checkActiveSession();
+  } catch(e){}
+}
 
     function checkActiveSession() {
       try {
