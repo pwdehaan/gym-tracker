@@ -179,6 +179,9 @@
     <div id="tab-reports" class="tab-content">
       <div class="card">
         <h3>Resultaten Bekijken</h3>
+        <button onclick="openGarminModal()" style="width:100%; background:#059669; color:white; padding:10px; border-radius:6px; border:none; cursor:pointer; margin: 10px 0; font-size:0.9rem; font-weight:600;">
+          ⌚ Garmin data koppelen aan eerdere sessie
+        </button>
         <div class="form-group" style="margin-top:10px;">
           <select id="report-filter-type" onchange="toggleReportFilter()">
             <option value="session">Per Sessie</option>
@@ -340,6 +343,13 @@
     
     <!-- Stap A: Plakken -->
     <div id="garminPasteSection">
+      <!-- Workout Selector (verschijnt als er geen actieve sessie is) -->
+<div id="garminWorkoutSelectContainer" style="margin-bottom:12px; display:none;">
+  <label style="font-size:0.85rem; font-weight:bold; display:block; margin-bottom:4px;">Kies afgeronde workout:</label>
+  <select id="garminWorkoutSelect" style="width:100%; padding:8px; border-radius:6px; border:1px solid #ccc; font-size:0.85rem;">
+    <!-- Wordt dynamisch gevuld met recente workouts -->
+  </select>
+</div>
       <p style="font-size:0.85rem; color:#666;">Kopieer en plak hier de volledige rondetabel uit Garmin Connect:</p>
       <textarea id="garminRawInput" rows="6" style="width:100%; box-sizing:border-box; font-family:monospace; font-size:0.8rem; padding:10px; border:1px solid #ccc; border-radius:6px;" placeholder="1Overige10:01,30:01,3..."></textarea>
       <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:12px;">
@@ -1457,10 +1467,52 @@ function openWodImportModal() {
   document.getElementById('wodModal').style.display = 'flex';
 }
 
-function openGarminModal() {
+/* 1. SLIMME MODAL OPENER: HERKENT ACTIEVE OF AFGERONDE TRAINING */
+function openGarminModal(specificWorkoutId = null) {
   document.getElementById('garminRawInput').value = '';
   document.getElementById('garminPasteSection').style.display = 'block';
   document.getElementById('garminReconcileSection').style.display = 'none';
+
+  const selectContainer = document.getElementById('garminWorkoutSelectContainer');
+  const selectElem = document.getElementById('garminWorkoutSelect');
+  const curSession = JSON.parse(localStorage.getItem('gt_current_session') || '{}');
+
+  // Als er een actieve sessie is en geen specifieke ID meegegeven, gebruik die direct
+  if (curSession && curSession.id && !specificWorkoutId) {
+    selectContainer.style.display = 'none';
+    window.selectedGarminWorkoutId = curSession.id;
+  } else {
+    // Geen actieve sessie: toon dropdown met unieke afgeronde workouts uit de logs
+    selectContainer.style.display = 'block';
+    selectElem.innerHTML = '';
+
+    // Haal unieke workouts op uit logs, gesorteerd van nieuw naar oud
+    const workoutMap = new Map();
+    logs.forEach(l => {
+      if (l.workoutId && !workoutMap.has(l.workoutId)) {
+        workoutMap.set(l.workoutId, { id: l.workoutId, date: l.date, firstEx: l.exerciseName });
+      }
+    });
+
+    const workoutList = Array.from(workoutMap.values()).reverse();
+
+    if (workoutList.length === 0) {
+      alert("Geen workouts gevonden in de historie.");
+      return;
+    }
+
+    workoutList.forEach(w => {
+      const opt = document.createElement('option');
+      opt.value = w.id;
+      opt.textContent = `${w.date} - ${w.firstEx} (${w.id})`;
+      if (specificWorkoutId && w.id === specificWorkoutId) opt.selected = true;
+      selectElem.appendChild(opt);
+    });
+
+    window.selectedGarminWorkoutId = selectElem.value;
+    selectElem.onchange = (e) => { window.selectedGarminWorkoutId = e.target.value; };
+  }
+
   document.getElementById('garminModal').style.display = 'flex';
 }
 
@@ -1605,25 +1657,24 @@ function parseGarminRawString(text) {
   return laps;
 }
 
-/* 3. EXCEPTION HANDLING & SIDE-BY-SIDE ANALYSE */
+/* 3. MATCHEN OP BASIS VAN DE GEKOZEN WORKOUT-ID */
 function analyzeGarminData() {
   const rawText = document.getElementById('garminRawInput').value.trim();
   parsedGarminLaps = parseGarminRawString(rawText);
 
   if (parsedGarminLaps.length === 0) {
-    return alert("Geen geldige Garmin-ronden kunnen uitlezen. Controleer of je de juiste data hebt gekopieerd.");
+    return alert("Geen geldige Garmin-ronden kunnen uitlezen.");
   }
 
-  // Haal de sets van de huidige actieve sessie op
-  const curSession = JSON.parse(localStorage.getItem('gt_current_session') || '{}');
-  const currentSets = logs.filter(l => l.workoutId === curSession.id);
+  // Bepaal het doel-workoutId (actief of geselecteerd uit dropdown)
+  const targetWorkoutId = window.selectedGarminWorkoutId;
+  const currentSets = logs.filter(l => l.workoutId === targetWorkoutId);
 
   if (currentSets.length === 0) {
-    return alert("Geen actieve sessie gevonden om mee te matchen. Maak eerst een sessie of WOD aan.");
+    return alert("Geen sets gevonden voor de geselecteerde workout.");
   }
 
-  // Filter de laps: oneven laps = werk, even laps = wisseltijd
-  // Als alle laps direct achter elkaar zijn geregistreerd zonder wissels, nemen we alle laps
+  // Filter laps: oneven = werk, even = wisseltijd
   const hasTransitions = parsedGarminLaps.length >= (currentSets.length * 1.5);
   const workLaps = hasTransitions ? parsedGarminLaps.filter(l => l.lapNumber % 2 !== 0) : [...parsedGarminLaps];
 
@@ -1631,13 +1682,11 @@ function analyzeGarminData() {
   const maxRows = Math.max(currentSets.length, workLaps.length);
 
   for (let i = 0; i < maxRows; i++) {
-    const set = currentSets[i] || null;
-    const lap = workLaps[i] || null;
     reconciledMatches.push({
       setIndex: i,
-      set: set,
-      lap: lap,
-      action: 'accept' // 'accept', 'ignore', 'add_exercise'
+      set: currentSets[i] || null,
+      lap: workLaps[i] || null,
+      action: 'accept'
     });
   }
 
