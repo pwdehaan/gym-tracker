@@ -90,6 +90,15 @@
           <button class="btn" id="start-btn" onclick="startNewSession()">Nieuwe Workout Starten</button>
         </div>
       </div>
+      <!-- Knoppen voor Import & Garmin Koppeling -->
+<div style="display:flex; gap:10px; margin: 15px 0; flex-wrap: wrap;">
+  <button class="btn btn-primary" onclick="openWodImportModal()" style="background:#2563eb; color:white; padding:8px 14px; border-radius:6px; border:none; cursor:pointer;">
+    📋 Importeer WOD (GEM)
+  </button>
+  <button class="btn btn-secondary" onclick="openGarminModal()" style="background:#059669; color:white; padding:8px 14px; border-radius:6px; border:none; cursor:pointer;">
+    ⌚ Koppel Garmin Data
+  </button>
+</div>
 
       <div id="active-session-view" style="display: none;">
         <!-- Sessie Header Card -->
@@ -311,6 +320,61 @@
       </div>
     </div>
   </div>
+  <!-- Modal: WOD Importeren -->
+<div id="wodModal" style="display:none; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.6); align-items:center; justify-content:center;">
+  <div style="background:var(--bg-card, #fff); color:var(--text, #111); padding:20px; border-radius:10px; max-width:550px; width:92%; max-height:85vh; overflow-y:auto; box-shadow:0 10px 25px rgba(0,0,0,0.3);">
+    <h3 style="margin-top:0;">📋 WOD Tekst Importeren</h3>
+    <p style="font-size:0.85rem; color:#666;">Plak hier het tekstblok dat door de WOD Scanner GEM is gegenereerd:</p>
+    <textarea id="wodInputText" rows="10" style="width:100%; box-sizing:border-box; font-family:monospace; font-size:0.85rem; padding:10px; border:1px solid #ccc; border-radius:6px;" placeholder="- Run 400mtr&#10;- Wisseltijd press lap 30s&#10;- Wall Balls (70 reps, 6kg) press lap 3m..."></textarea>
+    <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:15px;">
+      <button onclick="closeModal('wodModal')" style="padding:8px 14px; border:1px solid #ccc; background:none; border-radius:6px; cursor:pointer;">Annuleren</button>
+      <button onclick="processWodImport()" style="padding:8px 16px; background:#2563eb; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">Aanmaken & Laden</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Garmin Reconciliatie & Exception Handling -->
+<div id="garminModal" style="display:none; position:fixed; z-index:9999; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.6); align-items:center; justify-content:center;">
+  <div style="background:var(--bg-card, #fff); color:var(--text, #111); padding:20px; border-radius:10px; max-width:850px; width:95%; max-height:90vh; overflow-y:auto; box-shadow:0 10px 25px rgba(0,0,0,0.3);">
+    <h3 style="margin-top:0;">⌚ Garmin Data Matchen & Verifiëren</h3>
+    
+    <!-- Stap A: Plakken -->
+    <div id="garminPasteSection">
+      <p style="font-size:0.85rem; color:#666;">Kopieer en plak hier de volledige rondetabel uit Garmin Connect:</p>
+      <textarea id="garminRawInput" rows="6" style="width:100%; box-sizing:border-box; font-family:monospace; font-size:0.8rem; padding:10px; border:1px solid #ccc; border-radius:6px;" placeholder="1Overige10:01,30:01,3..."></textarea>
+      <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:12px;">
+        <button onclick="closeModal('garminModal')" style="padding:8px 14px; border:1px solid #ccc; background:none; border-radius:6px; cursor:pointer;">Annuleren</button>
+        <button onclick="analyzeGarminData()" style="padding:8px 16px; background:#059669; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">Analyseer & Match Laps</button>
+      </div>
+    </div>
+
+    <!-- Stap B: Side-by-Side Exception Matcher -->
+    <div id="garminReconcileSection" style="display:none;">
+      <div id="reconcileAlertBox" style="margin-bottom:12px; padding:10px 14px; border-radius:6px; font-size:0.85rem; display:none;"></div>
+      
+      <div style="max-height:50vh; overflow-y:auto; border:1px solid #eee; border-radius:6px; margin-bottom:15px;">
+        <table style="width:100%; border-collapse:collapse; font-size:0.85rem; text-align:left;">
+          <thead style="background:rgba(0,0,0,0.04); position:sticky; top:0;">
+            <tr>
+              <th style="padding:8px; border-bottom:1px solid #ddd;">Oefening (Gepland)</th>
+              <th style="padding:8px; border-bottom:1px solid #ddd;">Garmin Lap Data</th>
+              <th style="padding:8px; border-bottom:1px solid #ddd;">Status / Actie</th>
+            </tr>
+          </thead>
+          <tbody id="reconcileTableBody"></tbody>
+        </table>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:15px; border-top:1px solid #eee; padding-top:12px;">
+        <button onclick="backToGarminPaste()" style="padding:7px 12px; border:1px solid #ccc; background:none; border-radius:6px; cursor:pointer; font-size:0.85rem;">← Opnieuw plakken</button>
+        <div style="display:flex; gap:10px;">
+          <button onclick="closeModal('garminModal')" style="padding:7px 12px; border:1px solid #ccc; background:none; border-radius:6px; cursor:pointer;">Annuleren</button>
+          <button onclick="saveReconciledData()" style="padding:8px 18px; background:#059669; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">Bevestig & Update Logs</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
   <script>
     const DEFAULT_GOOGLE_URL = '';
@@ -1381,6 +1445,350 @@ function startNewSession() {
     }
 
     function clearAllData() { if (confirm('Alle lokale data wissen?')) { localStorage.clear(); location.reload(); } }
+/* ==========================================================================
+   WOD IMPORT & GARMIN RECONCILIATION LOGICA
+   ========================================================================== */
+
+let parsedGarminLaps = [];
+let reconciledMatches = [];
+
+function openWodImportModal() {
+  document.getElementById('wodInputText').value = '';
+  document.getElementById('wodModal').style.display = 'flex';
+}
+
+function openGarminModal() {
+  document.getElementById('garminRawInput').value = '';
+  document.getElementById('garminPasteSection').style.display = 'block';
+  document.getElementById('garminReconcileSection').style.display = 'none';
+  document.getElementById('garminModal').style.display = 'flex';
+}
+
+function closeModal(id) {
+  document.getElementById(id).style.display = 'none';
+}
+
+/* 1. WOD TEKST PARSEN NAAR ACTIEVE SESSIE & SETS */
+function processWodImport() {
+  const rawText = document.getElementById('wodInputText').value.trim();
+  if (!rawText) return alert("Plak eerst de WOD tekst.");
+
+  const lines = rawText.split('\n');
+  const now = new Date();
+  const workoutId = 'W-' + Date.now().toString().slice(-6);
+  const workoutDate = typeof getLocalDateString === 'function' ? getLocalDateString(now) : now.toISOString().slice(0, 10);
+
+  const newSession = {
+    id: workoutId,
+    date: workoutDate,
+    startTime: now.toTimeString().substring(0, 5),
+    startTimestamp: now.getTime(),
+    endTime: null,
+    note: lines[0].replace(/^[#\s-]+/, '').trim() || 'Hyrox WOD'
+  };
+
+  let importedLogs = [];
+  let setIndex = 1;
+
+  lines.forEach(line => {
+    let clean = line.trim();
+    if (!clean.startsWith('-')) return;
+    clean = clean.replace(/^-\s*/, '');
+
+    // Sla wisseltijden over voor de sets-array
+    if (/wisseltijd|rust|rest/i.test(clean)) return;
+
+    let exMatch = null;
+    let pVal = '';
+    let wVal = 'BW';
+
+    // Regex variant A: Herhalingen en gewicht "(70 reps, 6kg)"
+    const repWeightMatch = clean.match(/(.+?)\s*\((?:(\d+)\s*reps?)?(?:[,\s]*(\d+(?:[.,]\d+)?)\s*kg)?\)/i);
+    // Regex variant B: Afstand en optioneel gewicht "Walking Lunges (20kg) 70mtr" of "Run 400mtr"
+    const distMatch = clean.match(/(.+?)(?:\s*\((?:(\d+(?:[.,]\d+)?)\s*kg)?\))?\s+(\d+)\s*(?:mtr|m)/i);
+
+    if (repWeightMatch) {
+      const rawName = repWeightMatch[1].trim();
+      pVal = repWeightMatch[2] || '1';
+      wVal = repWeightMatch[3] ? repWeightMatch[3].replace(',', '.') : 'BW';
+      exMatch = findExerciseByName(rawName);
+    } else if (distMatch) {
+      const rawName = distMatch[1].trim();
+      wVal = distMatch[2] ? distMatch[2].replace(',', '.') : 'BW';
+      pVal = distMatch[3] + 'm';
+      exMatch = findExerciseByName(rawName);
+    } else {
+      exMatch = findExerciseByName(clean);
+      pVal = '1';
+    }
+
+    const logEntry = {
+      id: 'log-' + Date.now() + '-' + setIndex,
+      workoutId: workoutId,
+      date: workoutDate,
+      exerciseId: exMatch ? exMatch.id : 'custom',
+      exerciseName: exMatch ? exMatch.name : clean.split('press')[0].trim(),
+      setNumber: setIndex++,
+      primaryValue: pVal,
+      weightValue: wVal,
+      extraValue: '',
+      work_kj: 0,
+      energy_kcal: 0
+    };
+
+    const calculated = typeof calculateEnergyForLog === 'function' ? calculateEnergyForLog(logEntry) : logEntry;
+    importedLogs.push(calculated);
+    logs.push(calculated);
+  });
+
+  if (importedLogs.length === 0) {
+    return alert("Geen geldige oefeningen gevonden in het tekstblok.");
+  }
+
+  localStorage.setItem('gt_logs', JSON.stringify(logs));
+  localStorage.setItem('gt_current_session', JSON.stringify(newSession));
+  
+  if (typeof uploadDataToCloud === 'function') uploadDataToCloud(false);
+  closeModal('wodModal');
+  alert(`Succes! WOD geladen met ${importedLogs.length} oefeningen.`);
+  location.reload();
+}
+
+/* Zoekhelper voor oefeningnamen */
+function findExerciseByName(rawName) {
+  const norm = rawName.toLowerCase();
+  return exercises.find(e => e.name.toLowerCase() === norm) ||
+         exercises.find(e => norm.includes(e.name.toLowerCase()) || e.name.toLowerCase().includes(norm)) ||
+         null;
+}
+
+/* 2. GARMIN CONNECT EXPORT / PLAK PARSER */
+function parseGarminRawString(text) {
+  const laps = [];
+  const splits = text.split(/-{3,}/);
+
+  splits.forEach(chunk => {
+    const trimmed = chunk.trim();
+    if (!trimmed) return;
+
+    // Herkent zowel de aaneengesloten rij-string als rijen met tabs/spaties
+    const m = trimmed.match(/(\d+)\s*Overige\s*(?:\d+|\d+\s*-\s*\d+)?\s*(\d+:\d+(?:,\d+)?)\s*(\d+:\d+(?:,\d+)?)(.*)/i);
+    if (m) {
+      const lapNum = parseInt(m[1], 10);
+      const splitTime = m[2];
+      const rest = m[4] || '';
+
+      // Tijd omrekenen naar seconden
+      const timeParts = splitTime.replace(',', '.').split(':');
+      const sec = parseFloat(timeParts[0]) * 60 + parseFloat(timeParts[1]);
+
+      // Zoek naar hartslagwaarden in het staartje van de data
+      let avgHr = null;
+      let maxHr = null;
+      const hrMatches = rest.match(/\b([5-9]\d|1\d\d|2[0-1]\d)\b/g);
+      if (hrMatches && hrMatches.length >= 2) {
+        avgHr = hrMatches[0];
+        maxHr = hrMatches[1];
+      }
+
+      laps.push({
+        lapNumber: lapNum,
+        timeFormatted: splitTime.split(',')[0], // bijv. "01:42"
+        seconds: Math.round(sec),
+        avgHr: avgHr,
+        maxHr: maxHr,
+        isShortGhost: sec < 5 // Vlag voor verdacht korte lap (dubbeltik)
+      });
+    }
+  });
+
+  return laps;
+}
+
+/* 3. EXCEPTION HANDLING & SIDE-BY-SIDE ANALYSE */
+function analyzeGarminData() {
+  const rawText = document.getElementById('garminRawInput').value.trim();
+  parsedGarminLaps = parseGarminRawString(rawText);
+
+  if (parsedGarminLaps.length === 0) {
+    return alert("Geen geldige Garmin-ronden kunnen uitlezen. Controleer of je de juiste data hebt gekopieerd.");
+  }
+
+  // Haal de sets van de huidige actieve sessie op
+  const curSession = JSON.parse(localStorage.getItem('gt_current_session') || '{}');
+  const currentSets = logs.filter(l => l.workoutId === curSession.id);
+
+  if (currentSets.length === 0) {
+    return alert("Geen actieve sessie gevonden om mee te matchen. Maak eerst een sessie of WOD aan.");
+  }
+
+  // Filter de laps: oneven laps = werk, even laps = wisseltijd
+  // Als alle laps direct achter elkaar zijn geregistreerd zonder wissels, nemen we alle laps
+  const hasTransitions = parsedGarminLaps.length >= (currentSets.length * 1.5);
+  const workLaps = hasTransitions ? parsedGarminLaps.filter(l => l.lapNumber % 2 !== 0) : [...parsedGarminLaps];
+
+  reconciledMatches = [];
+  const maxRows = Math.max(currentSets.length, workLaps.length);
+
+  for (let i = 0; i < maxRows; i++) {
+    const set = currentSets[i] || null;
+    const lap = workLaps[i] || null;
+    reconciledMatches.push({
+      setIndex: i,
+      set: set,
+      lap: lap,
+      action: 'accept' // 'accept', 'ignore', 'add_exercise'
+    });
+  }
+
+  renderReconcileTable(currentSets.length, workLaps.length);
+  document.getElementById('garminPasteSection').style.display = 'none';
+  document.getElementById('garminReconcileSection').style.display = 'block';
+}
+
+function renderReconcileTable(setCount, lapCount) {
+  const tbody = document.getElementById('reconcileTableBody');
+  const alertBox = document.getElementById('reconcileAlertBox');
+  tbody.innerHTML = '';
+
+  // Toon duidelijke waarschuwingen bij mismatch
+  if (setCount === lapCount) {
+    alertBox.style.display = 'block';
+    alertBox.style.background = '#ecfdf5';
+    alertBox.style.color = '#065f46';
+    alertBox.innerHTML = `✅ <strong>Perfecte match:</strong> Exact ${setCount} sets gekoppeld aan ${lapCount} werkrondes!`;
+  } else if (lapCount > setCount) {
+    alertBox.style.display = 'block';
+    alertBox.style.background = '#eff6ff';
+    alertBox.style.color = '#1e40af';
+    alertBox.innerHTML = `ℹ️ <strong>Meer rondes dan sets:</strong> Je hebt ${lapCount} werkrondes en ${setCount} geplande sets. Kies onderaan wat je met de extra ronde(s) wilt doen.`;
+  } else {
+    alertBox.style.display = 'block';
+    alertBox.style.background = '#fffbeb';
+    alertBox.style.color = '#92400e';
+    alertBox.innerHTML = `⚠️ <strong>Minder rondes dan sets:</strong> ${setCount} sets tegenover ${lapCount} werkrondes. De ontbrekende sets blijven behouden zonder tijdsmeting.`;
+  }
+
+  reconciledMatches.forEach((row, idx) => {
+    const tr = document.createElement('tr');
+    tr.style.borderBottom = '1px solid #eee';
+
+    // Kolom 1: Gepland
+    let colSet = `<span style="color:#888;">(Geen geplande set)</span>`;
+    if (row.set) {
+      colSet = `<strong>${idx + 1}. ${row.set.exerciseName}</strong><br><small style="color:#666;">${row.set.primaryValue} | ${row.set.weightValue} kg</small>`;
+    }
+
+    // Kolom 2: Garmin Data
+    let colLap = `<span style="color:#888;">(Geen Garmin lap)</span>`;
+    if (row.lap) {
+      const hrText = row.lap.avgHr ? ` | ❤️ ${row.lap.avgHr} bpm` : '';
+      colLap = `Ronde ${row.lap.lapNumber}: <strong>${row.lap.timeFormatted}</strong>${hrText}`;
+      if (row.lap.isShortGhost) {
+        colLap += ` <span style="background:#fef3c7; color:#92400e; padding:2px 6px; border-radius:4px; font-size:0.75rem;">⚠️ Korte lap (&lt;5s)</span>`;
+      }
+    }
+
+    // Kolom 3: Status / Actie
+    let colAction = '';
+    if (row.set && row.lap) {
+      colAction = `<span style="color:#059669; font-weight:bold;">✓ Gekoppeld</span>`;
+      if (row.lap.isShortGhost) {
+        colAction += ` <button onclick="ignoreLap(${idx})" style="font-size:0.75rem; margin-left:6px; cursor:pointer;">Negeer lap</button>`;
+      }
+    } else if (row.set && !row.lap) {
+      colAction = `<span style="color:#d97706;">Handmatig (geen data)</span>`;
+    } else if (!row.set && row.lap) {
+      colAction = `
+        <select onchange="assignExtraExercise(${idx}, this.value)" style="font-size:0.8rem; padding:4px;">
+          <option value="ignore">-- Negeer extra lap --</option>
+          ${exercises.map(e => `<option value="${e.id}">${e.name}</option>`).join('')}
+        </select>
+      `;
+    }
+
+    tr.innerHTML = `
+      <td style="padding:8px;">${colSet}</td>
+      <td style="padding:8px;">${colLap}</td>
+      <td style="padding:8px;">${colAction}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function ignoreLap(index) {
+  reconciledMatches[index].lap = null;
+  renderReconcileTable(
+    reconciledMatches.filter(m => m.set).length,
+    reconciledMatches.filter(m => m.lap).length
+  );
+}
+
+function assignExtraExercise(index, exerciseId) {
+  if (exerciseId === 'ignore') {
+    reconciledMatches[index].extraExerciseId = null;
+  } else {
+    reconciledMatches[index].extraExerciseId = exerciseId;
+  }
+}
+
+function backToGarminPaste() {
+  document.getElementById('garminReconcileSection').style.display = 'none';
+  document.getElementById('garminPasteSection').style.display = 'block';
+}
+
+/* 4. DEFINITIEVE OPSLAG EN HERBEREKENING NAAR GOOGLE SHEETS */
+function saveReconciledData() {
+  const curSession = JSON.parse(localStorage.getItem('gt_current_session') || '{}');
+  let updatedCount = 0;
+
+  reconciledMatches.forEach(item => {
+    // Bestaande set updaten met Garmin tijd en hartslag
+    if (item.set && item.lap) {
+      const hrInfo = item.lap.avgHr ? ` (${item.lap.avgHr} bpm)` : '';
+      item.set.extraValue = `${item.lap.timeFormatted}${hrInfo}`;
+      
+      // Herbereken energie met eventuele nieuwe parameters
+      if (typeof calculateEnergyForLog === 'function') {
+        const recalc = calculateEnergyForLog(item.set);
+        item.set.work_kj = recalc.work_kj;
+        item.set.energy_kcal = recalc.energy_kcal;
+      }
+      updatedCount++;
+    }
+
+    // Extra ronde toevoegen als nieuwe set
+    if (!item.set && item.lap && item.extraExerciseId) {
+      const ex = exercises.find(e => e.id === item.extraExerciseId);
+      const newLog = {
+        id: 'log-' + Date.now() + '-extra',
+        workoutId: curSession.id,
+        date: curSession.date,
+        exerciseId: ex.id,
+        exerciseName: ex.name,
+        setNumber: logs.filter(l => l.workoutId === curSession.id).length + 1,
+        primaryValue: '1',
+        weightValue: 'BW',
+        extraValue: `${item.lap.timeFormatted}${item.lap.avgHr ? ` (${item.lap.avgHr} bpm)` : ''}`,
+        work_kj: 0,
+        energy_kcal: 0
+      };
+      const calculated = typeof calculateEnergyForLog === 'function' ? calculateEnergyForLog(newLog) : newLog;
+      logs.push(calculated);
+      updatedCount++;
+    }
+  });
+
+  localStorage.setItem('gt_logs', JSON.stringify(logs));
+  if (typeof uploadDataToCloud === 'function') uploadDataToCloud(false);
+
+  closeModal('garminModal');
+  alert(`Klaar! ${updatedCount} sets zijn verrijkt met Garmin tijden & hartslagen en opgeslagen.`);
+  if (typeof renderReports === 'function') renderReports();
+  location.reload();
+}
+    
   </script>
+  
 </body>
 </html>
