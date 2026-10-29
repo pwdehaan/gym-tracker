@@ -1738,16 +1738,22 @@ function backToGarminPaste() {
 }
 
 /* 4. DEFINITIEVE OPSLAG EN HERBEREKENING NAAR GOOGLE SHEETS */
+/* 4. DEFINITIEVE OPSLAG EN HERBEREKENING NAAR GOOGLE SHEETS */
 function saveReconciledData() {
   const curSession = JSON.parse(localStorage.getItem('gt_current_session') || '{}');
   let updatedCount = 0;
 
   reconciledMatches.forEach(item => {
-    // Bestaande set updaten met Garmin tijd en hartslag
+    // 1. Bestaande set verrijken met Garmin data
     if (item.set && item.lap) {
       const hrInfo = item.lap.avgHr ? ` (${item.lap.avgHr} bpm)` : '';
       item.set.extraValue = `${item.lap.timeFormatted}${hrInfo}`;
-      
+
+      // === HIER WORDEN DE NUMERIEKE GARMIN-VELDEN TOEGEVOEGD ===
+      item.set.duration_sec = item.lap.seconds || null;
+      item.set.avg_hr = parseInt(item.lap.avgHr, 10) || null;
+      item.set.max_hr = parseInt(item.lap.maxHr, 10) || null;
+
       // Herbereken energie met eventuele nieuwe parameters
       if (typeof calculateEnergyForLog === 'function') {
         const recalc = calculateEnergyForLog(item.set);
@@ -1757,7 +1763,7 @@ function saveReconciledData() {
       updatedCount++;
     }
 
-    // Extra ronde toevoegen als nieuwe set
+    // 2. Extra ronde toevoegen als nieuwe set
     if (!item.set && item.lap && item.extraExerciseId) {
       const ex = exercises.find(e => e.id === item.extraExerciseId);
       const newLog = {
@@ -1770,9 +1776,16 @@ function saveReconciledData() {
         primaryValue: '1',
         weightValue: 'BW',
         extraValue: `${item.lap.timeFormatted}${item.lap.avgHr ? ` (${item.lap.avgHr} bpm)` : ''}`,
+        
+        // Numerieke Garmin-velden voor de extra set:
+        duration_sec: item.lap.seconds || null,
+        avg_hr: parseInt(item.lap.avgHr, 10) || null,
+        max_hr: parseInt(item.lap.maxHr, 10) || null,
+        
         work_kj: 0,
         energy_kcal: 0
       };
+      
       const calculated = typeof calculateEnergyForLog === 'function' ? calculateEnergyForLog(newLog) : newLog;
       logs.push(calculated);
       updatedCount++;
